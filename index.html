@@ -214,6 +214,24 @@ const daysOld = d => { if(!d) return null; const x=new Date(d); return isNaN(x)?
 function toast(msg, ms=2600){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), ms); }
 function haversine(a,b){ const R=6371, r=Math.PI/180; const dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r; const x=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
 function tokens(s){ return String(s).toLowerCase().replace(/[^a-zæøå0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>=3); }
+// Tolker mengde: "400 g", "1,5 kg", "3x200 g", "33 cl", "6 stk", "per kg" -> {amount, unit, per}
+function parseQty(str){
+  if(!str) return null;
+  const t = String(str).toLowerCase().replace(',', '.').replace(/\s+/g,' ').trim();
+  const per = t.match(/(?:^|\s)(?:per|pr\.?|\/)\s*(kg|hg|g|l|liter|dl|cl|ml|stk)\b/);
+  if(per){ const u = per[1]; return {amount:1, unit: ['kg','hg','g'].includes(u)?'kg':(u==='stk'?'stk':'l'), per:true}; }
+  const m = t.match(/(?:(\d+(?:\.\d+)?)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*(kg|hg|g|gram|liter|l|dl|cl|ml|stk|pk|pakning|bokser|bokser)\b/);
+  if(!m) return null;
+  const n = (m[1]?+m[1]:1) * +m[2], u = m[3];
+  const conv = {kg:[1,'kg'], hg:[0.1,'kg'], g:[0.001,'kg'], gram:[0.001,'kg'], l:[1,'l'], liter:[1,'l'], dl:[0.1,'l'], cl:[0.01,'l'], ml:[0.001,'l'], stk:[1,'stk'], pk:[1,'stk'], pakning:[1,'stk'], bokser:[1,'stk']}[u];
+  const amount = n*conv[0];
+  return amount>0 ? {amount, unit:conv[1], per:false} : null;
+}
+function unitPrice(price, qtyStr){
+  const q = parseQty(qtyStr); if(!q || price==null || isNaN(price)) return null;
+  return {value: q.per ? +price : +price/q.amount, unit:q.unit};
+}
+const fmtUnit = u => u ? kr(u.value)+'/'+u.unit : '';
 function hash(s){ let h=2166136261; for(const c of String(s)){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return (h>>>0); }
 
 /* ================= API (via mellomtjenesten) ================= */
@@ -288,16 +306,16 @@ async function nearbyStores(origin){
 }
 /* ---- Delte tilbud ---- */
 let demoShared = null;
-function mapShared(o){ return {id:'r'+o.id, remoteId:o.id, chain:o.chain, name:o.name, price:+o.price, condition:o.condition||'', member:o.member||'',
+function mapShared(o){ return {id:'r'+o.id, remoteId:o.id, chain:o.chain, name:o.name, price:+o.price, qty:o.qty||'', condition:o.condition||'', member:o.member||'',
   from:o.valid_from||'', to:o.valid_to||'', source:'delt', confirms:o.confirms||0, reports:o.reports||0, nick:o.nick||'', mine:!!o.mine, created:o.created_at}; }
 async function syncShared(origin, force=false){
   if(!force && Date.now()-S.shared.ts < 10*60e3) return;
   let list;
   if(S.settings.demo){
     demoShared ||= [
-      {id:9001, chain:'rema', name:'Grandiosa Original', price:39.9, condition:'', member:'', valid_from:today(), valid_to:new Date(Date.now()+3*864e5).toISOString().slice(0,10), nick:'Kari', confirms:4, reports:0},
+      {id:9001, chain:'rema', name:'Grandiosa Original', qty:'575 g', price:39.9, condition:'', member:'', valid_from:today(), valid_to:new Date(Date.now()+3*864e5).toISOString().slice(0,10), nick:'Kari', confirms:4, reports:0},
       {id:9002, chain:'extra', name:'Tine Lettmelk 1 l', price:19.9, condition:'maks 4', member:'coop', valid_from:today(), valid_to:new Date(Date.now()+2*864e5).toISOString().slice(0,10), nick:'', confirms:1, reports:0},
-      {id:9003, chain:'meny', name:'Bananer per kg', price:17.9, condition:'', member:'', valid_from:today(), valid_to:'', nick:'Ole', confirms:0, reports:1}
+      {id:9003, chain:'meny', name:'Bananer', qty:'per kg', price:17.9, condition:'', member:'', valid_from:today(), valid_to:'', nick:'Ole', confirms:0, reports:1}
     ];
     list = demoShared;
   } else {
@@ -314,7 +332,7 @@ async function shareOffers(newOffers){
     const origin = await getOrigin();
     const j = await api('/offers', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({
       device:S.settings.deviceId, nick:S.settings.nick, lat:origin.lat, lng:origin.lng,
-      offers:newOffers.map(o=>({localId:o.id, chain:o.chain, name:o.name, price:o.price, condition:o.condition, member:o.member, from:o.from, to:o.to, source:o.source}))})});
+      offers:newOffers.map(o=>({localId:o.id, chain:o.chain, name:o.name, price:o.price, qty:o.qty||'', condition:o.condition, member:o.member, from:o.from, to:o.to, source:o.source}))})});
     for(const r of j.ids||[]){ const o = S.offers.find(x=>x.id===r.localId); if(o) o.remoteId = r.id; }
     S.shared.ts = 0; save();
     toast('Delt med nærområdet');
@@ -416,7 +434,7 @@ async function candidatesFor(item){
     if(!offerValid(o) || !offerMatches(o,item)) continue;
     if(o.member && !S.memberships[o.member]?.on) continue;
     const cur = cand[o.chain];
-    if(!cur || o.price < cur.base) cand[o.chain] = {base:+o.price, source:o.source==='delt'?'Delt tilbud':'Tilbud', date:null, note:[o.condition, o.member?('kun '+PROGRAMS[o.member].name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).join(' · '), offerName:o.name};
+    if(!cur || o.price < cur.base) cand[o.chain] = {base:+o.price, source:o.source==='delt'?'Delt tilbud':'Tilbud', date:null, note:[o.condition, o.member?('kun '+PROGRAMS[o.member].name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).join(' · '), offerName:o.name, qty:o.qty||''};
   }
   for(const [chain,c] of Object.entries(cand)){
     const bonus = memberBonus(chain), pers = personalPct(chain,item);
@@ -506,7 +524,7 @@ function buildVariant(b, k, origin, stores, rows){
     store: st, chain: st.chain, dist: haversine(origin, st),
     items: b.pick.filter(p=>p.chain===st.chain).map(p=>({
       itemId:p.item.id, name:p.item.productName||p.item.name, qty:p.item.qty, unit:p.eff, base:p.base, total:p.eff*p.item.qty,
-      source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, done:false
+      source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, unitTxt:fmtUnit(unitPrice(p.eff, p.qty)), done:false
     }))
   }));
   const pts = route.order.map(s=>s.lat+','+s.lng);
@@ -659,6 +677,10 @@ function vTilbud(){
         <select id="offMember" class="grow">${progOpts('')}</select>
         <input id="offTo" type="date" class="grow" aria-label="Gyldig til">
       </div>
+      <div class="row" style="margin-top:8px">
+        <input id="offQty" class="grow" placeholder="Mengde, f.eks. 400 g, 1,5 l, per kg, 6 stk" autocomplete="off">
+        <span id="offUnit" class="small" style="min-width:90px;text-align:right"></span>
+      </div>
       <input id="offCond" placeholder="Betingelse (valgfritt), f.eks. 3 for 2" style="margin-top:8px">
       <button class="btn big">Lagre tilbud</button>
     </form>
@@ -669,7 +691,7 @@ function vTilbud(){
       <h3>${CHAINS[c]||c}</h3>
       ${list.map(o=>`<div class="item">
         <div class="grow"><div class="name">${esc(o.name)}</div>
-          <div class="tiny">${[o.condition, o.member?('kun '+PROGRAMS[o.member]?.name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).map(esc).join(' · ')}</div></div>
+          <div class="tiny">${[o.qty, fmtUnit(unitPrice(o.price, o.qty||o.name)), o.condition, o.member?('kun '+PROGRAMS[o.member]?.name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).map(esc).join(' · ')}</div></div>
         <div class="price">${kr(+o.price)}</div>
         <button class="btn ghost odel" data-id="${o.id}" aria-label="Slett">✕</button></div>`).join('')}`).join('')
       : '<div class="empty">Ingen aktive tilbud ennå.</div>'}
@@ -686,7 +708,7 @@ function vShared(){
     ${list.length ? Object.entries(byChain).map(([c,l])=>`<h3>${CHAINS[c]||c}</h3>${l.map(o=>`
       <div class="item">
         <div class="grow"><div class="name">${esc(o.name)}</div>
-          <div class="tiny">${[o.condition, o.member?('kun '+(PROGRAMS[o.member]?.name||'')):'', o.to?('t.o.m. '+fmtDate(o.to)):'', o.nick?('av '+o.nick):''].filter(Boolean).map(esc).join(' · ')}</div></div>
+          <div class="tiny">${[o.qty, fmtUnit(unitPrice(o.price, o.qty||o.name)), o.condition, o.member?('kun '+(PROGRAMS[o.member]?.name||'')):'', o.to?('t.o.m. '+fmtDate(o.to)):'', o.nick?('av '+o.nick):''].filter(Boolean).map(esc).join(' · ')}</div></div>
         <div class="price">${kr(o.price)}</div>
         <button class="btn ghost vote" data-id="${o.remoteId}" data-k="confirm" title="Stemmer" style="${o.voted==='confirm'?'color:var(--green)':''}">👍 ${o.confirms||''}</button>
         <button class="btn ghost vote" data-id="${o.remoteId}" data-k="report" title="Feil / utgått" style="${o.voted==='report'?'color:var(--red)':''}">⚠${o.reports?' '+o.reports:''}</button>
@@ -728,7 +750,7 @@ function bTilbud(){
       const res = await parseFlyer(payload, chainHint);
       const chain = normChain(res.kjede) || chainHint || 'kiwi';
       pendingImport = (res.tilbud||[]).map(t=>({
-        keep:true, chain, name:[t.merke, t.vare, t.mengde].filter(Boolean).join(' '),
+        keep:true, chain, name:[t.merke, t.vare].filter(Boolean).join(' '), qty: t.mengde||'',
         price: t.pris, condition: t.betingelse||'', member: t.kun_medlem ? (Object.keys(PROGRAMS).find(k=>PROGRAMS[k].chains.includes(chain))||'') : '',
         from: res.gyldig_fra||'', to: res.gyldig_til||''
       })).filter(t=>t.price!=null && !isNaN(+t.price));
@@ -740,10 +762,12 @@ function bTilbud(){
   $('#offForm').onsubmit = e => {
     e.preventDefault();
     const o = {id:uid(), chain:$('#offChain').value, name:$('#offName').value.trim(), price:+$('#offPrice').value,
-      condition:$('#offCond').value.trim(), member:$('#offMember').value, from:today(), to:$('#offTo').value||'', source:'manuell'};
+      qty:$('#offQty').value.trim(), condition:$('#offCond').value.trim(), member:$('#offMember').value, from:today(), to:$('#offTo').value||'', source:'manuell'};
     S.offers.push(o); save(); toast('Tilbud lagret'); render();
     shareOffers([o]);
   };
+  const upd = () => { const u = unitPrice(+$('#offPrice').value || null, $('#offQty').value || $('#offName').value); $('#offUnit').textContent = u ? '= '+fmtUnit(u) : ''; };
+  ['#offQty','#offPrice','#offName'].forEach(id=>$(id).addEventListener('input', upd));
   document.querySelectorAll('.odel').forEach(el=>el.onclick=()=>{
     const o = S.offers.find(x=>x.id===el.dataset.id); if(o?.remoteId) deleteShared(o.remoteId);
     S.offers=S.offers.filter(x=>x.id!==el.dataset.id); save(); render();
@@ -777,6 +801,7 @@ function openReview(){
       ${L.map((t,i)=>`<tr>
         <td><input type="checkbox" class="rvk" data-i="${i}" ${t.keep?'checked':''}></td>
         <td><input class="rvn" data-i="${i}" value="${esc(t.name)}">
+            <div class="row" style="margin-top:4px"><input class="rvq" data-i="${i}" value="${esc(t.qty)}" placeholder="Mengde, f.eks. 400 g"><span class="tiny rvu" data-i="${i}" style="min-width:70px;text-align:right">${esc(fmtUnit(unitPrice(t.price, t.qty)))}</span></div>
             <div class="row" style="margin-top:4px"><input class="rvc" data-i="${i}" value="${esc(t.condition)}" placeholder="Betingelse">
             <select class="rvm" data-i="${i}" style="width:auto">${progOpts(t.member)}</select></div></td>
         <td style="width:84px"><input class="rvp" data-i="${i}" type="number" step="0.01" value="${esc(t.price)}" inputmode="decimal"></td>
@@ -784,13 +809,17 @@ function openReview(){
     </tbody></table>
     <button id="rvSave" class="btn big">Lagre valgte</button>
     <button id="rvCancel" class="btn ghost" style="width:100%">Avbryt</button>`);
+  document.querySelectorAll('.rvq,.rvp').forEach(el=>el.addEventListener('input',()=>{
+    const i = el.dataset.i, u = unitPrice(+document.querySelector(`.rvp[data-i="${i}"]`).value, document.querySelector(`.rvq[data-i="${i}"]`).value);
+    document.querySelector(`.rvu[data-i="${i}"]`).textContent = fmtUnit(u);
+  }));
   $('#rvSave').onclick = () => {
     const chain=$('#rvChain').value, from=$('#rvFrom').value, to=$('#rvTo').value; const added=[];
     L.forEach((t,i)=>{
       if(!document.querySelector(`.rvk[data-i="${i}"]`).checked) return;
       const price = +document.querySelector(`.rvp[data-i="${i}"]`).value; if(isNaN(price)) return;
       const o = {id:uid(), chain, name:document.querySelector(`.rvn[data-i="${i}"]`).value.trim(), price,
-        condition:document.querySelector(`.rvc[data-i="${i}"]`).value.trim(), member:document.querySelector(`.rvm[data-i="${i}"]`).value,
+        qty:document.querySelector(`.rvq[data-i="${i}"]`).value.trim(), condition:document.querySelector(`.rvc[data-i="${i}"]`).value.trim(), member:document.querySelector(`.rvm[data-i="${i}"]`).value,
         from, to, source:'kundeavis'};
       S.offers.push(o); added.push(o);
     });
@@ -824,7 +853,7 @@ function vTur(){
         return `<label class="item ${i.done?'done':''}">
           <input type="checkbox" class="tick" data-s="${n}" data-i="${j}" ${i.done?'checked':''}>
           <div class="grow"><div class="name">${i.qty>1?i.qty+' × ':''}${esc(i.name)}</div>
-            <div class="tiny"><span class="pill ${stale?'w':''}">${esc(i.source)}</span>${stale?`<span class="warn">pris fra ${fmtDate(i.date)} – kan være utdatert</span> `:''}${esc([i.note,i.disc].filter(Boolean).join(' · '))}</div></div>
+            <div class="tiny"><span class="pill ${stale?'w':''}">${esc(i.source)}</span>${stale?`<span class="warn">pris fra ${fmtDate(i.date)} – kan være utdatert</span> `:''}${esc([i.unitTxt,i.note,i.disc].filter(Boolean).join(' · '))}</div></div>
           <div class="price">${kr(i.total)}</div></label>`; }).join('')}
       </div>
     </div>`).join('')}

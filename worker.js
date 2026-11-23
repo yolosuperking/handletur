@@ -155,7 +155,7 @@ async function sharedOffers(req, url, env, json) {
     if (!isFinite(lat) || !isFinite(lng)) return json({ error: 'lat/lng mangler' }, 400);
     const dLat = km / 111, dLng = km / (111 * Math.cos(lat * Math.PI / 180));
     const { results } = await DB.prepare(
-      `SELECT id, chain, name, price, condition, member, valid_from, valid_to, source, nick, confirms, reports, created_at, device
+      `SELECT id, chain, name, price, qty, condition, member, valid_from, valid_to, source, nick, confirms, reports, created_at, device
          FROM offers
         WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?
           AND (valid_to = '' OR valid_to >= ?) AND reports < 3
@@ -179,13 +179,13 @@ async function sharedOffers(req, url, env, json) {
       .bind(device, Date.now() - 3600e3).first();
     if ((recent?.n || 0) + list.length > 600) return json({ error: 'For mange tilbud på kort tid. Prøv igjen senere.' }, 429);
     const nick = clean(body.nick, 30);
-    const stmt = DB.prepare(`INSERT INTO offers (chain,name,price,condition,member,valid_from,valid_to,lat,lng,source,device,nick,created_at)
-                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`);
+    const stmt = DB.prepare(`INSERT INTO offers (chain,name,price,qty,condition,member,valid_from,valid_to,lat,lng,source,device,nick,created_at)
+                             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`);
     const batch = [], keys = [];
     for (const o of list) {
       const price = +o.price, name = clean(o.name, 120), from = clean(o.from, 10), to = clean(o.to, 10);
       if (!CHAIN_IDS.includes(o.chain) || !name || !(price > 0 && price < 100000) || !isDate(from) || !isDate(to)) continue;
-      batch.push(stmt.bind(o.chain, name, price, clean(o.condition, 80), MEMBER_IDS.includes(o.member) ? o.member : '',
+      batch.push(stmt.bind(o.chain, name, price, clean(o.qty, 30), clean(o.condition, 80), MEMBER_IDS.includes(o.member) ? o.member : '',
         from, to, lat, lng, clean(o.source, 20), device, nick, Date.now()));
       keys.push(o.localId || null);
     }

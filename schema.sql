@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS offers (
   chain       TEXT NOT NULL,
   name        TEXT NOT NULL,
   price       REAL NOT NULL,
+  qty         TEXT DEFAULT '',  -- mengde, f.eks. '400 g' eller 'per kg'
   condition   TEXT DEFAULT '',
   member      TEXT DEFAULT '',
   valid_from  TEXT DEFAULT '',
