@@ -41,6 +41,28 @@ export default {
       return json({ ok: true, kassal: !!env.KASSAL_API_KEY, ai: !!env.ANTHROPIC_API_KEY, db: !!env.DB, admin: isAdmin || !env.ADMIN_TOKEN });
     }
 
+    // ---------- Personlig profil (synk mellom telefoner) ----------
+    if (url.pathname === '/profile/get' || url.pathname === '/profile/put') {
+      if (!env.DB) return json({ error: 'Databasen (DB) er ikke koblet til mellomtjenesten' }, 500);
+      if (req.method !== 'POST') return json({ error: 'Ikke tillatt' }, 405);
+      let body = {};
+      try { body = await req.json(); } catch { }
+      const code = String(body.code || '');
+      if (code.length < 16 || code.length > 64) return json({ error: 'Ugyldig profilkode' }, 400);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('handletur:' + code));
+      const key = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+      if (url.pathname === '/profile/get') {
+        const row = await env.DB.prepare(`SELECT data, updated_at FROM profiles WHERE key = ?`).bind(key).first();
+        return json(row ? { data: JSON.parse(row.data), updated_at: row.updated_at } : { data: null, updated_at: 0 });
+      }
+      const data = JSON.stringify(body.data ?? null);
+      if (data.length > 500000) return json({ error: 'Profilen er for stor' }, 413);
+      const ts = Math.min(Date.now() + 60000, +body.updated_at || Date.now());
+      await env.DB.prepare(`INSERT INTO profiles (key, data, updated_at) VALUES (?,?,?)
+                            ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`).bind(key, data, ts).run();
+      return json({ ok: true, updated_at: ts });
+    }
+
     // ---------- Delte tilbud ----------
     if (url.pathname === '/offers' || url.pathname.startsWith('/offers/')) {
       if (!env.DB) return json({ error: 'Databasen (DB) er ikke koblet til mellomtjenesten' }, 500);

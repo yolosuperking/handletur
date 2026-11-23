@@ -26,3 +26,10 @@ CREATE TABLE IF NOT EXISTS votes (
   kind     TEXT NOT NULL,      -- 'confirm' eller 'report'
   PRIMARY KEY (offer_id, device)
 );
+
+-- Personlige profiler: handleliste, medlemskap, innstillinger m.m. Nøkkelen er en hash av profilkoden.
+CREATE TABLE IF NOT EXISTS profiles (
+  key        TEXT PRIMARY KEY,
+  data       TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

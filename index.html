@@ -123,6 +123,7 @@ const DEFAULT = {
   settings:{proxyUrl:'', appToken:'', radiusKm:5, maxStores:2, minSaving:30, returnHome:false, manualPos:'', demo:false,
             share:true, nick:'', sharedKm:25, deviceId:''},
   shared:{ts:0, offers:[]}, // tilbud fra andre i nærområdet
+  sync:{code:'', lastChange:0, lastPush:0}, // profil i skyen
   memberships:{trumf:{on:false,bonus:0}, kiwipluss:{on:false,bonus:0}, coop:{on:false,bonus:0}, ae:{on:false,bonus:0}},
   personal:[],   // {id, program, keyword, pct}
   items:[],      // {id, name, qty, ean, productName}
@@ -130,6 +131,7 @@ const DEFAULT = {
   priceCache:{}, // ean -> {ts, prices:[{chain, price, date, name}]}
   trip:null
 };
+let applyingRemote = false, pushTimer = null, syncState = '';
 let S = load();
 function load(){
   try{
@@ -142,9 +144,64 @@ function load(){
   return s;
 }
 function deepMerge(a,b){ for(const k in b){ if(b[k] && typeof b[k]==='object' && !Array.isArray(b[k]) && a[k] && typeof a[k]==='object' && !Array.isArray(a[k])) deepMerge(a[k],b[k]); else a[k]=b[k]; } return a; }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function save(silent=false){
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  if(!silent && !applyingRemote){ S.sync.lastChange = Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} schedulePush(); }
+}
 if(!S.settings.deviceId){ S.settings.deviceId = 'd'+uidLong(); save(); }
 function uidLong(){ return Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''); }
+
+/* ================= Profil i skyen ================= */
+// Det som følger med profilen. Mellomtjeneste-URL, token og demo-modus er per telefon.
+const LOCAL_ONLY = ['proxyUrl','appToken','isAdmin','demo'];
+function syncEnabled(){ return !!(S.sync.code && !S.settings.demo && S.settings.proxyUrl && S.settings.appToken); }
+function newProfileCode(){
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', b = crypto.getRandomValues(new Uint8Array(20));
+  return Array.from(b, x=>abc[x % abc.length]).join('').match(/.{4}/g).join('-');
+}
+function profilePayload(){
+  const settings = {...S.settings}; LOCAL_ONLY.forEach(k=>delete settings[k]);
+  return {settings, memberships:S.memberships, personal:S.personal, items:S.items, offers:S.offers, trip:S.trip};
+}
+function applyProfile(d, ts){
+  applyingRemote = true;
+  const keep = Object.fromEntries(LOCAL_ONLY.map(k=>[k,S.settings[k]]));
+  S.settings = {...structuredClone(DEFAULT.settings), ...(d.settings||{}), ...keep};
+  for(const k of ['memberships','personal','items','offers','trip']) if(k in d) S[k] = k==='memberships' ? deepMerge(structuredClone(DEFAULT.memberships), d[k]||{}) : d[k];
+  S.sync.lastChange = S.sync.lastPush = ts;
+  save(true); applyingRemote = false;
+}
+function schedulePush(){
+  if(!syncEnabled()) return;
+  clearTimeout(pushTimer); pushTimer = setTimeout(pushProfile, 1500);
+}
+async function pushProfile(){
+  if(!syncEnabled()) return;
+  const ts = S.sync.lastChange || Date.now();
+  try{
+    syncState = 'lagrer';
+    const r = await api('/profile/put', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({code:S.sync.code, data:profilePayload(), updated_at:ts})});
+    S.sync.lastPush = r.updated_at || ts; syncState = 'ok'; save(true);
+  }catch(e){ syncState = 'feil: '+e.message; }
+  if(view==='profil') updateSyncStatus();
+}
+// Henter profilen. Er den i skyen nyere enn det som er endret her, brukes den.
+async function pullProfile(force=false){
+  if(!syncEnabled()) return {found:false, applied:false};
+  const r = await api('/profile/get', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({code:S.sync.code})});
+  if(!r.data){ if(!force) await pushProfile(); return {found:false, applied:false}; }
+  const localNewer = S.sync.lastChange > S.sync.lastPush && S.sync.lastChange > r.updated_at;
+  if(force || (!localNewer && r.updated_at > S.sync.lastPush)){ applyProfile(r.data, r.updated_at); syncState='ok'; return {found:true, applied:true}; }
+  if(localNewer) await pushProfile();
+  syncState='ok'; return {found:true, applied:false};
+}
+function updateSyncStatus(){
+  const el = document.getElementById('syncStatus'); if(!el) return;
+  el.innerHTML = !syncEnabled() ? (S.sync.code ? '<span class="warn">Ikke tilkoblet – sjekk oppsett eller slå av demo-modus</span>' : '')
+    : syncState.startsWith('feil') ? `<span class="err">${esc(syncState)}</span>`
+    : syncState==='lagrer' ? '<span class="spin"></span> Lagrer…'
+    : S.sync.lastPush ? '✓ Lagret i skyen '+new Date(S.sync.lastPush).toLocaleString('nb-NO',{dateStyle:'short',timeStyle:'short'}) : '';
+}
 
 /* ================= Hjelpere ================= */
 const $ = s => document.querySelector(s);
@@ -196,7 +253,7 @@ async function pricesForEan(ean){
     }
     prices = Object.values(best);
   }
-  S.priceCache[ean] = {ts:Date.now(), prices}; save();
+  S.priceCache[ean] = {ts:Date.now(), prices}; save(true);
   return prices;
 }
 async function nearbyStores(origin){
@@ -227,7 +284,7 @@ async function syncShared(origin, force=false){
     const j = await api(`/offers?lat=${origin.lat}&lng=${origin.lng}&km=${S.settings.sharedKm}&device=${S.settings.deviceId}`);
     list = j.offers || [];
   }
-  S.shared = {ts:Date.now(), offers:list.map(mapShared)}; save();
+  S.shared = {ts:Date.now(), offers:list.map(mapShared)}; save(true);
 }
 async function shareOffers(newOffers){
   if(!S.settings.share || !newOffers.length) return;
@@ -603,9 +660,9 @@ async function shrinkImage(file){
 function canImport(){ return S.settings.demo || S.settings.isAdmin === true; }
 // Spør mellomtjenesten om tokenet er admin, og husk svaret
 async function checkRole(){
-  if(S.settings.demo || !S.settings.proxyUrl || !S.settings.appToken){ S.settings.isAdmin = false; save(); return null; }
-  try{ const j = await api('/health'); S.settings.isAdmin = !!j.admin; save(); return j; }
-  catch(e){ S.settings.isAdmin = false; save(); throw e; }
+  if(S.settings.demo || !S.settings.proxyUrl || !S.settings.appToken){ S.settings.isAdmin = false; save(true); return null; }
+  try{ const j = await api('/health'); S.settings.isAdmin = !!j.admin; save(true); return j; }
+  catch(e){ S.settings.isAdmin = false; save(true); throw e; }
 }
 function bTilbud(){
   if($('#impBtn')) $('#impBtn').onclick = async () => {
@@ -745,6 +802,22 @@ function vProfil(){
   const st = S.settings;
   return `
   <div class="card">
+    <h2>Min profil</h2>
+    ${S.sync.code ? `
+      <p class="small" style="margin-top:0">Alt du endrer lagres automatisk: handleliste, medlemskap, rabatter, tilbud og innstillinger. Skriv inn koden på en annen telefon for å hente alt dit. Deler dere kode, deler dere også handlelisten.</p>
+      <label class="lbl">Profilkoden din – ta vare på den</label>
+      <div class="row"><input id="pcShow" class="grow" value="${esc(S.sync.code)}" readonly style="font-family:ui-monospace,monospace;letter-spacing:.04em"><button id="pcCopy" class="btn sec">Kopier</button></div>
+      <div id="syncStatus" class="small" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:6px"><button id="pcSync" class="btn sec grow">Synk nå</button><button id="pcOut" class="btn ghost">Koble fra</button></div>`
+    : `
+      <p class="small" style="margin-top:0">Lag en profil, så huskes alt du endrer også om du bytter telefon eller sletter nettleserdata. Har du allerede en kode, skriv den inn.</p>
+      ${st.demo || !st.proxyUrl || !st.appToken ? '<p class="small warn">Slå av demo-modus og fyll inn Oppsett nederst først.</p>' : ''}
+      <button id="pcNew" class="btn big" ${st.demo||!st.proxyUrl||!st.appToken?'disabled':''}>Lag ny profil</button>
+      <label class="lbl">Har du en profilkode?</label>
+      <div class="row"><input id="pcIn" class="grow" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters" autocorrect="off"><button id="pcJoin" class="btn sec" ${st.demo||!st.proxyUrl||!st.appToken?'disabled':''}>Hent</button></div>
+      <div id="syncStatus" class="small" style="margin-top:8px"></div>`}
+  </div>
+  <div class="card">
     <h2>Medlemskap</h2>
     <p class="small" style="margin-top:0">Slå på det du er medlem av. Bonus i % trekkes fra prisen i sammenligningen. Medlemstilbud brukes bare når du er medlem.</p>
     ${Object.entries(PROGRAMS).map(([k,p])=>`
@@ -806,11 +879,37 @@ function vProfil(){
 }
 function bProfil(){
   const st = S.settings;
+  updateSyncStatus();
+  const on = (id, fn) => { const el = $(id); if(el) el.onclick = fn; };
+  on('#pcNew', async () => {
+    S.sync.code = newProfileCode(); S.sync.lastChange = Date.now(); S.sync.lastPush = 0; save(true);
+    await pushProfile(); render(); toast('Profil laget – kopier koden og ta vare på den', 4000);
+  });
+  on('#pcJoin', async () => {
+    const code = $('#pcIn').value.trim().toUpperCase().replace(/\s+/g,'');
+    if(code.length < 16){ toast('Koden er for kort'); return; }
+    const prev = S.sync.code; S.sync.code = code;
+    try{
+      const res = await pullProfile(true);
+      if(!res.found){ S.sync.code = prev; toast('Fant ingen profil med den koden'); render(); return; }
+      save(true); toast('Profil hentet'); render();
+    }catch(e){ S.sync.code = prev; toast(e.message, 4500); }
+  });
+  on('#pcCopy', async () => { try{ await navigator.clipboard.writeText(S.sync.code); toast('Kopiert'); }catch(e){ $('#pcShow').select(); toast('Merk og kopier koden'); } });
+  on('#pcSync', async () => { syncState='lagrer'; updateSyncStatus(); try{ await pullProfile(); }catch(e){ syncState='feil: '+e.message; } render(); });
+  on('#pcOut', () => {
+    modal(`<h2 style="margin:0 0 8px">Koble fra profilen?</h2>
+      <p class="small">Dataene blir liggende på denne telefonen og i skyen. Du kan hente dem igjen med koden:</p>
+      <p style="font-family:ui-monospace,monospace">${esc(S.sync.code)}</p>
+      <button id="pcOutYes" class="btn big">Koble fra</button><button id="pcOutNo" class="btn ghost" style="width:100%">Avbryt</button>`);
+    $('#pcOutYes').onclick = () => { S.sync = {code:'', lastChange:0, lastPush:0}; save(true); closeModal(); render(); };
+    $('#pcOutNo').onclick = closeModal;
+  });
   document.querySelectorAll('.mOn').forEach(el=>el.onchange=()=>{ S.memberships[el.dataset.k].on=el.checked; save(); });
   document.querySelectorAll('.mBonus').forEach(el=>el.onchange=()=>{ S.memberships[el.dataset.k].bonus=Math.max(0,+el.value||0); save(); });
   document.querySelectorAll('.pdel').forEach(el=>el.onclick=()=>{ S.personal=S.personal.filter(r=>r.id!==el.dataset.id); save(); render(); });
   $('#pForm').onsubmit = e => { e.preventDefault(); S.personal.push({id:uid(), program:$('#pProg').value, keyword:$('#pKey').value.trim(), pct:+$('#pPct').value}); save(); render(); };
-  const bind = (id, key, fn=v=>v) => { $(id).onchange = () => { st[key] = fn($(id).type==='checkbox' ? $(id).checked : $(id).value); save(); if(id==='#sDemo') render(); }; };
+  const bind = (id, key, fn=v=>v) => { $(id).onchange = () => { st[key] = fn($(id).type==='checkbox' ? $(id).checked : $(id).value); save(); if(['#sDemo','#sUrl','#sTok'].includes(id)) render(); }; };
   bind('#sMax','maxStores',v=>Math.min(5,Math.max(1,+v||1)));
   bind('#sMin','minSaving',v=>Math.max(0,+v||0));
   bind('#sRad','radiusKm',v=>Math.min(50,Math.max(1,+v||5)));
@@ -834,7 +933,7 @@ function bProfil(){
     try{ const o = JSON.parse($('#bkTxt').value); S = deepMerge(structuredClone(DEFAULT), o); save(); toast('Data lastet inn'); render(); }
     catch(e){ toast('Ugyldig sikkerhetskopi'); }
   };
-  $('#clearPrices').onclick = () => { S.priceCache = {}; save(); toast('Prismellomlager tømt'); };
+  $('#clearPrices').onclick = () => { S.priceCache = {}; save(true); toast('Prismellomlager tømt'); };
 }
 
 /* ---- Modal ---- */
@@ -847,6 +946,10 @@ function closeModal(){ $('#modalRoot').innerHTML=''; }
 /* ---- Start ---- */
 render();
 checkRole().then(()=>{ if(view==='tilbud') render(); }).catch(()=>{});
+// Hent siste versjon av profilen ved oppstart og når appen åpnes igjen
+const refreshProfile = () => pullProfile().then(r=>{ if(r.applied && !$('#modalRoot').innerHTML) render(); }).catch(()=>{});
+refreshProfile();
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') refreshProfile(); else if(S.sync.lastChange > S.sync.lastPush) pushProfile(); });
 try{ if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
 </script>
 </body>
