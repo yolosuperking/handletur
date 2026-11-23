@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14532d">
+<title>Handletur</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#f5f6f3; --card:#fff; --ink:#1b1f1c; --muted:#6b736d; --line:#e3e6e1;
+  --green:#14532d; --green2:#1f7a44; --soft:#e8f3ec; --warn:#a15c00; --warnbg:#fff4e0; --red:#b42318;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#111412; --card:#1a1e1b; --ink:#e9ece9; --muted:#9aa39c; --line:#2b312d; --green:#4ade80; --green2:#22c55e; --soft:#1d2d22; --warn:#f0b354; --warnbg:#2e2412; --red:#f87171;}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 12px) 16px 8px;display:flex;align-items:center;justify-content:space-between}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.badge{font-size:12px;padding:3px 8px;border-radius:99px;background:var(--warnbg);color:var(--warn);font-weight:600}
+main{padding:4px 12px calc(env(safe-area-inset-bottom) + 90px);max-width:640px;margin:0 auto}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;color:var(--muted);padding:10px 0 12px;font:600 12px system-ui;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav button svg{width:22px;height:22px}
+nav button.on{color:var(--green)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:10px 0}
+.card h2{font-size:16px;margin:0 0 10px}
+.card h3{font-size:14px;margin:12px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.row{display:flex;gap:8px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+input,select,textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 11px;width:100%}
+input[type=checkbox]{width:22px;height:22px;accent-color:var(--green2);flex:none}
+input.num{width:74px;text-align:center}
+textarea{min-height:90px;font-size:13px;font-family:ui-monospace,monospace}
+.btn{font:600 15px system-ui;border:0;border-radius:10px;padding:11px 14px;background:var(--green);color:#fff;cursor:pointer;white-space:nowrap}
+@media (prefers-color-scheme: dark){.btn{color:#0b1a10}}
+.btn.sec{background:var(--soft);color:var(--green)}
+.btn.ghost{background:none;color:var(--muted);padding:8px}
+.btn.big{width:100%;padding:15px;font-size:16px;margin-top:6px}
+button.btn:disabled{opacity:.5}
+.item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-of-type{border-top:0}
+.item .name{font-weight:600}
+.small{font-size:13px;color:var(--muted)}
+.tiny{font-size:12px;color:var(--muted)}
+.price{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.warn{color:var(--warn)}
+.err{color:var(--red)}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:99px;background:var(--soft);color:var(--green);margin-right:4px}
+.pill.w{background:var(--warnbg);color:var(--warn)}
+.stop{border-left:4px solid var(--green2)}
+.stopnum{width:30px;height:30px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:800;flex:none}
+@media (prefers-color-scheme: dark){.stopnum{color:#0b1a10}}
+.done .name{text-decoration:line-through;color:var(--muted)}
+.total{font-size:22px;font-weight:800}
+.alts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.alts span{font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+.alts span.sel{border-color:var(--green2);color:var(--green);font-weight:700}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:85vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 14px calc(env(safe-area-inset-bottom) + 16px)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 80px);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:14px;z-index:30;max-width:90%}
+.empty{text-align:center;color:var(--muted);padding:20px 8px}
+table.rev{width:100%;border-collapse:collapse;font-size:13px}
+table.rev td{padding:4px 3px;border-top:1px solid var(--line);vertical-align:top}
+table.rev input,table.rev select{padding:6px;font-size:13px;border-radius:7px}
+label.lbl{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s 0.8s linear infinite;vertical-align:-3px}
+@keyframes s{to{transform:rotate(360deg)}}
+a.btn{display:block;text-align:center;text-decoration:none}
+</style>
+</head>
+<body>
+<header><h1 id="title">Handleliste</h1><span id="demoBadge" class="badge" hidden>DEMO</span></header>
+<main id="main"></main>
+<nav id="nav">
+  <button data-v="liste"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Liste</button>
+  <button data-v="tilbud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>Tilbud</button>
+  <button data-v="tur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/></svg>Handletur</button>
+  <button data-v="profil"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil</button>
+</nav>
+<div id="modalRoot"></div>
+
+<script>
+"use strict";
+/* ================= Grunndata ================= */
+const CHAINS = {
+  rema:'Rema 1000', kiwi:'Kiwi', meny:'Meny', spar:'Spar', joker:'Joker',
+  extra:'Coop Extra', prix:'Coop Prix', mega:'Coop Mega', obs:'Obs', marked:'Coop Marked', bunnpris:'Bunnpris'
+};
+// Hvilke kjeder hvert kundeprogram gjelder i. Bonusprosent fyller du inn selv i Profil.
+const PROGRAMS = {
+  trumf:    {name:'Trumf', chains:['kiwi','meny','spar','joker']},
+  kiwipluss:{name:'Kiwi Pluss', chains:['kiwi']},
+  coop:     {name:'Coop medlem', chains:['extra','prix','mega','obs','marked']},
+  ae:       {name:'Æ (Rema 1000)', chains:['rema']}
+};
+const STALE_DAYS = 14;
+const PRICE_CACHE_H = 6;
+
+function normChain(s){
+  if(!s) return null; s = String(s).toLowerCase();
+  if(s.includes('rema')) return 'rema';
+  if(s.includes('kiwi')) return 'kiwi';
+  if(s.includes('meny')) return 'meny';
+  if(s.includes('joker')) return 'joker';
+  if(s.includes('spar')) return 'spar';
+  if(s.includes('extra')) return 'extra';
+  if(s.includes('prix')) return 'prix';
+  if(s.includes('mega')) return 'mega';
+  if(s.includes('obs')) return 'obs';
+  if(s.includes('marked')) return 'marked';
+  if(s.includes('bunnpris')) return 'bunnpris';
+  return null;
+}
+
+/* ================= Lagring ================= */
+const KEY = 'handletur.v1';
+const DEFAULT = {
+  settings:{proxyUrl:'', appToken:'', radiusKm:5, maxStores:2, minSaving:30, returnHome:false, manualPos:'', demo:false,
+            share:true, nick:'', sharedKm:25, deviceId:''},
+  shared:{ts:0, offers:[]}, // tilbud fra andre i nærområdet
+  memberships:{trumf:{on:false,bonus:0}, kiwipluss:{on:false,bonus:0}, coop:{on:false,bonus:0}, ae:{on:false,bonus:0}},
+  personal:[],   // {id, program, keyword, pct}
+  items:[],      // {id, name, qty, ean, productName}
+  offers:[],     // {id, chain, name, price, condition, member(programKey|''), from, to, source}
+  priceCache:{}, // ean -> {ts, prices:[{chain, price, date, name}]}
+  trip:null
+};
+let S = load();
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const o = JSON.parse(raw); return deepMerge(structuredClone(DEFAULT), o); }
+  }catch(e){}
+  const s = structuredClone(DEFAULT);
+  // Ingen proxy satt opp ennå -> start i demo-modus så appen kan prøves
+  s.settings.demo = true;
+  return s;
+}
+function deepMerge(a,b){ for(const k in b){ if(b[k] && typeof b[k]==='object' && !Array.isArray(b[k]) && a[k] && typeof a[k]==='object' && !Array.isArray(a[k])) deepMerge(a[k],b[k]); else a[k]=b[k]; } return a; }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+if(!S.settings.deviceId){ S.settings.deviceId = 'd'+uidLong(); save(); }
+function uidLong(){ return Array.from(crypto.getRandomValues(new Uint8Array(12)),b=>b.toString(16).padStart(2,'0')).join(''); }
+
+/* ================= Hjelpere ================= */
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const kr = n => (n==null||isNaN(n)) ? '–' : n.toLocaleString('nb-NO',{minimumFractionDigits:2,maximumFractionDigits:2})+' kr';
+const today = () => new Date().toISOString().slice(0,10);
+const fmtDate = d => { if(!d) return ''; const x=new Date(d); return isNaN(x)?'':x.toLocaleDateString('nb-NO',{day:'2-digit',month:'2-digit'}); };
+const daysOld = d => { if(!d) return null; const x=new Date(d); return isNaN(x)?null:Math.floor((Date.now()-x)/864e5); };
+function toast(msg, ms=2600){ const t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), ms); }
+function haversine(a,b){ const R=6371, r=Math.PI/180; const dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r; const x=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
+function tokens(s){ return String(s).toLowerCase().replace(/[^a-zæøå0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>=3); }
+function hash(s){ let h=2166136261; for(const c of String(s)){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); } return (h>>>0); }
+
+/* ================= API (via mellomtjenesten) ================= */
+async function api(path, opts={}){
+  const base = S.settings.proxyUrl.replace(/\/+$/,'');
+  if(!base) throw new Error('Mellomtjeneste-URL mangler. Legg den inn under Profil → Oppsett.');
+  const r = await fetch(base+path, {...opts, headers:{'x-app-token':S.settings.appToken, ...(opts.headers||{})}});
+  const txt = await r.text();
+  let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('Uventet svar ('+r.status+')'); }
+  if(!r.ok) throw new Error(j.error || j.message || ('Feil '+r.status));
+  return j;
+}
+async function searchProducts(q){
+  if(S.settings.demo) return demoSearch(q);
+  const j = await api('/kassal/products?search='+encodeURIComponent(q)+'&size=30');
+  return (j.data||[]).map(p=>({
+    name:p.name, brand:p.brand, ean:p.ean, weight: p.weight ? (p.weight+' '+(p.weight_unit||'')) : '',
+    chain: normChain(p.store?.code||p.store?.name),
+    price: typeof p.current_price==='object' ? p.current_price?.price : p.current_price
+  })).filter(p=>p.ean);
+}
+async function pricesForEan(ean){
+  const c = S.priceCache[ean];
+  if(c && Date.now()-c.ts < PRICE_CACHE_H*3600e3) return c.prices;
+  let prices;
+  if(S.settings.demo || String(ean).startsWith('demo-')) prices = demoPrices(ean);
+  else{
+    const j = await api('/kassal/products/ean/'+encodeURIComponent(ean));
+    const prods = j.data?.products || [];
+    const best = {};
+    for(const p of prods){
+      const chain = normChain(p.store?.code || p.store?.name); if(!chain) continue;
+      const price = typeof p.current_price==='object' ? p.current_price?.price : p.current_price;
+      const date = (typeof p.current_price==='object' && p.current_price?.date) || p.updated_at || null;
+      if(price==null) continue;
+      if(!best[chain] || price < best[chain].price) best[chain] = {chain, price:+price, date, name:p.name};
+    }
+    prices = Object.values(best);
+  }
+  S.priceCache[ean] = {ts:Date.now(), prices}; save();
+  return prices;
+}
+async function nearbyStores(origin){
+  if(S.settings.demo) return demoStores();
+  const j = await api(`/kassal/physical-stores?lat=${origin.lat}&lng=${origin.lng}&km=${S.settings.radiusKm}&size=100`);
+  return (j.data||[]).map(s=>({
+    chain: normChain(s.group || s.name),
+    name: s.name, address: s.address || '',
+    lat: +(s.position?.lat ?? s.lat), lng: +(s.position?.lng ?? s.lng)
+  })).filter(s=>s.chain && !isNaN(s.lat) && !isNaN(s.lng));
+}
+/* ---- Delte tilbud ---- */
+let demoShared = null;
+function mapShared(o){ return {id:'r'+o.id, remoteId:o.id, chain:o.chain, name:o.name, price:+o.price, condition:o.condition||'', member:o.member||'',
+  from:o.valid_from||'', to:o.valid_to||'', source:'delt', confirms:o.confirms||0, reports:o.reports||0, nick:o.nick||'', mine:!!o.mine, created:o.created_at}; }
+async function syncShared(origin, force=false){
+  if(!force && Date.now()-S.shared.ts < 10*60e3) return;
+  let list;
+  if(S.settings.demo){
+    demoShared ||= [
+      {id:9001, chain:'rema', name:'Grandiosa Original', price:39.9, condition:'', member:'', valid_from:today(), valid_to:new Date(Date.now()+3*864e5).toISOString().slice(0,10), nick:'Kari', confirms:4, reports:0},
+      {id:9002, chain:'extra', name:'Tine Lettmelk 1 l', price:19.9, condition:'maks 4', member:'coop', valid_from:today(), valid_to:new Date(Date.now()+2*864e5).toISOString().slice(0,10), nick:'', confirms:1, reports:0},
+      {id:9003, chain:'meny', name:'Bananer per kg', price:17.9, condition:'', member:'', valid_from:today(), valid_to:'', nick:'Ole', confirms:0, reports:1}
+    ];
+    list = demoShared;
+  } else {
+    origin ||= await getOrigin();
+    const j = await api(`/offers?lat=${origin.lat}&lng=${origin.lng}&km=${S.settings.sharedKm}&device=${S.settings.deviceId}`);
+    list = j.offers || [];
+  }
+  S.shared = {ts:Date.now(), offers:list.map(mapShared)}; save();
+}
+async function shareOffers(newOffers){
+  if(!S.settings.share || !newOffers.length) return;
+  if(S.settings.demo){ newOffers.forEach((o,i)=>o.remoteId = 8000+i+Math.floor(Math.random()*999)); save(); return; }
+  try{
+    const origin = await getOrigin();
+    const j = await api('/offers', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({
+      device:S.settings.deviceId, nick:S.settings.nick, lat:origin.lat, lng:origin.lng,
+      offers:newOffers.map(o=>({localId:o.id, chain:o.chain, name:o.name, price:o.price, condition:o.condition, member:o.member, from:o.from, to:o.to, source:o.source}))})});
+    for(const r of j.ids||[]){ const o = S.offers.find(x=>x.id===r.localId); if(o) o.remoteId = r.id; }
+    S.shared.ts = 0; save();
+    toast('Delt med nærområdet');
+  }catch(e){ toast('Lagret lokalt, men deling feilet: '+e.message, 4500); }
+}
+async function voteShared(remoteId, kind){
+  if(!S.settings.demo) await api(`/offers/${remoteId}/${kind}`, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({device:S.settings.deviceId})});
+  const o = S.shared.offers.find(x=>x.remoteId===remoteId);
+  if(o){ if(o.voted && o.voted!==kind) o[o.voted==='confirm'?'confirms':'reports']--; if(o.voted!==kind) o[kind==='confirm'?'confirms':'reports']++; o.voted = kind; }
+  save();
+}
+async function deleteShared(remoteId){
+  if(S.settings.demo) return;
+  try{ await api(`/offers/${remoteId}`, {method:'DELETE', headers:{'content-type':'application/json'}, body:JSON.stringify({device:S.settings.deviceId})}); }catch(e){}
+}
+function allOffers(){
+  const own = new Set(S.offers.map(o=>o.remoteId).filter(Boolean));
+  return [...S.offers, ...S.shared.offers.filter(o=>!own.has(o.remoteId) && !o.mine && o.reports<3 && o.voted!=='report')];
+}
+
+async function parseFlyer(files, chainHint){
+  if(S.settings.demo) return demoParse(chainHint);
+  const payload = {chainHint: chainHint ? CHAINS[chainHint] : '', today: today(), files};
+  return api('/parse', {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)});
+}
+
+/* ================= Demo-data (kun for å prøve appen) ================= */
+const DEMO_ORIGIN = {lat:67.2804, lng:14.4049};
+function demoStores(){
+  const pts = [['rema',.004,.006],['kiwi',-.003,.01],['extra',.008,-.004],['meny',-.006,-.012],['spar',.012,.015],['prix',-.01,.003],['rema',-.014,-.02],['obs',.018,-.03]];
+  return pts.map(([c,a,b],i)=>({chain:c, name:'Demo '+CHAINS[c]+' '+(i+1), address:'Demogate '+(i+3), lat:DEMO_ORIGIN.lat+a, lng:DEMO_ORIGIN.lng+b}));
+}
+function demoSearch(q){
+  const h = hash(q);
+  return ['1 l','500 g','stor pakke'].map((w,i)=>({name:q.charAt(0).toUpperCase()+q.slice(1)+' '+w, brand:'Demo', ean:'demo-'+(h+i), weight:w, chain:null, price:null}));
+}
+function demoPrices(ean){
+  const h = hash(ean), base = 15 + (h % 60);
+  const out = [];
+  for(const c of ['rema','kiwi','extra','meny','spar','prix','obs']){
+    const f = 0.85 + ((hash(ean+c) % 40)/100);
+    const old = ['rema','kiwi','extra','prix','obs'].includes(c);
+    out.push({chain:c, price: Math.round(base*f*10)/10, date: new Date(Date.now()-(old?40:1)*864e5).toISOString(), name:'Demo'});
+  }
+  return out;
+}
+function demoParse(hint){
+  const c = hint || 'kiwi';
+  const to = new Date(Date.now()+5*864e5).toISOString().slice(0,10);
+  return {kjede:CHAINS[c], gyldig_fra:today(), gyldig_til:to, tilbud:[
+    {vare:'Kaffe filtermalt', merke:'Demo', mengde:'250 g', pris:39.9, betingelse:'', kun_medlem:false, normalpris:54.9},
+    {vare:'Kyllingfilet', merke:'Demo', mengde:'1 kg', pris:99, betingelse:'maks 2 per kunde', kun_medlem:true, normalpris:149},
+    {vare:'Bananer', merke:'', mengde:'per kg', pris:19.9, betingelse:'', kun_medlem:false, normalpris:29.9},
+    {vare:'Smør', merke:'Demo', mengde:'500 g', pris:25, betingelse:'2 for 50', kun_medlem:false, normalpris:36.9}
+  ]};
+}
+
+/* ================= Beregning ================= */
+function offerValid(o){ const t=today(); return (!o.from || o.from<=t) && (!o.to || o.to>=t); }
+function offerMatches(o, item){
+  if(o.ean && item.ean && o.ean===item.ean) return true;
+  const it = tokens(item.productName || item.name); if(!it.length) return false;
+  const on = String(o.name).toLowerCase();
+  // treff hvis alle ord i varenavnet på listen finnes i tilbudsteksten
+  const core = tokens(item.name);
+  return (core.length ? core : it).every(w => on.includes(w));
+}
+function memberBonus(chain){
+  let best = 0;
+  for(const [k,p] of Object.entries(PROGRAMS)){
+    const m = S.memberships[k]; if(m?.on && p.chains.includes(chain)) best = Math.max(best, +m.bonus||0);
+  }
+  return best;
+}
+function personalPct(chain, item){
+  let pct = 0; const nm = (item.productName||item.name).toLowerCase();
+  for(const r of S.personal){
+    if(!S.memberships[r.program]?.on) continue;
+    if(!PROGRAMS[r.program].chains.includes(chain)) continue;
+    if(r.keyword && nm.includes(r.keyword.toLowerCase())) pct = Math.max(pct, +r.pct||0);
+  }
+  return pct;
+}
+async function candidatesFor(item){
+  const cand = {}; // chain -> {base, eff, source, date, note}
+  if(item.ean){
+    try{
+      for(const p of await pricesForEan(item.ean)) cand[p.chain] = {base:p.price, source:'Kassalapp', date:p.date, note:''};
+    }catch(e){ console.warn(e); }
+  }
+  for(const o of allOffers()){
+    if(!offerValid(o) || !offerMatches(o,item)) continue;
+    if(o.member && !S.memberships[o.member]?.on) continue;
+    const cur = cand[o.chain];
+    if(!cur || o.price < cur.base) cand[o.chain] = {base:+o.price, source:o.source==='delt'?'Delt tilbud':'Tilbud', date:null, note:[o.condition, o.member?('kun '+PROGRAMS[o.member].name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).join(' · '), offerName:o.name};
+  }
+  for(const [chain,c] of Object.entries(cand)){
+    const bonus = memberBonus(chain), pers = personalPct(chain,item);
+    c.eff = c.base * (1-pers/100) * (1-bonus/100);
+    c.disc = [pers?('-'+pers+' % personlig'):'', bonus?('-'+bonus+' % bonus'):''].filter(Boolean).join(', ');
+  }
+  return cand;
+}
+function* combos(arr,k,start=0,acc=[]){
+  if(acc.length===k){ yield acc.slice(); return; }
+  for(let i=start;i<arr.length;i++){ acc.push(arr[i]); yield* combos(arr,k,i+1,acc); acc.pop(); }
+}
+function evalSubset(sub, rows){
+  let cost=0, missing=0; const pick=[];
+  for(const r of rows){
+    let best=null;
+    for(const c of sub){ const x=r.cand[c]; if(x && (!best || x.eff<best.eff)) best={chain:c,...x}; }
+    if(best){ cost += best.eff*r.item.qty; pick.push({item:r.item, ...best}); } else if(Object.keys(r.cand).length) missing++;
+  }
+  return {sub, cost, missing, pick};
+}
+function bestRoute(origin, chosen, stores){
+  // For hver kjede: de 3 nærmeste butikkene. Prøv alle kombinasjoner og rekkefølger.
+  const opts = chosen.map(c => stores.filter(s=>s.chain===c).sort((a,b)=>haversine(origin,a)-haversine(origin,b)).slice(0,3));
+  let best=null;
+  const perms = a => a.length<=1 ? [a] : a.flatMap((x,i)=>perms([...a.slice(0,i),...a.slice(i+1)]).map(p=>[x,...p]));
+  const pick = (i,acc) => {
+    if(i===opts.length){
+      for(const order of perms(acc)){
+        let d=0, prev=origin; for(const s of order){ d+=haversine(prev,s); prev=s; }
+        if(S.settings.returnHome) d+=haversine(prev,origin);
+        if(!best || d<best.d) best={d, order};
+      }
+      return;
+    }
+    for(const s of opts[i]) pick(i+1,[...acc,s]);
+  };
+  pick(0,[]);
+  return best;
+}
+function getOrigin(){
+  if(S.settings.demo) return Promise.resolve(DEMO_ORIGIN);
+  const m = S.settings.manualPos.match(/(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)/);
+  return new Promise((res,rej)=>{
+    const fallback = () => m ? res({lat:+m[1], lng:+m[2]}) : rej(new Error('Fikk ikke posisjon. Tillat posisjon, eller legg inn fast posisjon under Profil → Oppsett.'));
+    if(!navigator.geolocation) return fallback();
+    navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude, lng:p.coords.longitude}), fallback, {timeout:10000, maximumAge:300000});
+  });
+}
+async function planTrip(){
+  const items = S.items.filter(i=>!i.done);
+  if(!items.length) throw new Error('Handlelisten er tom.');
+  const origin = await getOrigin();
+  try{ await syncShared(origin); }catch(e){ console.warn('Delte tilbud:', e); }
+  const stores = await nearbyStores(origin);
+  if(!stores.length) throw new Error('Fant ingen kjente butikker innen '+S.settings.radiusKm+' km. Øk radiusen under Profil.');
+  const nearChains = [...new Set(stores.map(s=>s.chain))];
+  const rows = [];
+  for(const item of items) rows.push({item, cand: Object.fromEntries(Object.entries(await candidatesFor(item)).filter(([c])=>nearChains.includes(c)))});
+  const usable = nearChains.filter(c => rows.some(r=>r.cand[c]));
+  const noPrice = rows.filter(r=>!Object.keys(r.cand).length).map(r=>r.item);
+  if(!usable.length) throw new Error('Ingen av varene har pris i butikkene i nærheten. Koble varene til produkter (trykk «Finn pris») eller legg inn tilbud.');
+  const maxK = Math.min(S.settings.maxStores, usable.length, 5);
+  const bestByK = [];
+  for(let k=1;k<=maxK;k++){
+    let best=null;
+    for(const sub of combos(usable,k)){
+      const r = evalSubset(sub, rows);
+      if(!best || r.missing<best.missing || (r.missing===best.missing && r.cost<best.cost)) best=r;
+    }
+    bestByK.push(best);
+  }
+  let chosen = bestByK[0];
+  for(const b of bestByK.slice(1)){
+    if(b.missing < chosen.missing || chosen.cost - b.cost >= S.settings.minSaving) chosen = b;
+  }
+  // Ta bort kjeder som ikke fikk noen varer
+  const usedChains = [...new Set(chosen.pick.map(p=>p.chain))];
+  const route = bestRoute(origin, usedChains, stores);
+  const stops = route.order.map(st => ({
+    store: st, chain: st.chain, dist: haversine(origin, st),
+    items: chosen.pick.filter(p=>p.chain===st.chain).map(p=>({
+      itemId:p.item.id, name:p.item.productName||p.item.name, qty:p.item.qty, unit:p.eff, base:p.base, total:p.eff*p.item.qty,
+      source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, done:false
+    }))
+  }));
+  const pts = route.order.map(s=>s.lat+','+s.lng);
+  const dest = S.settings.returnHome ? origin.lat+','+origin.lng : pts[pts.length-1];
+  const wps = S.settings.returnHome ? pts : pts.slice(0,-1);
+  const mapsUrl = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&origin='+origin.lat+','+origin.lng+'&destination='+dest+(wps.length?'&waypoints='+encodeURIComponent(wps.join('|')):'');
+  const missing = rows.filter(r=>Object.keys(r.cand).length && !chosen.pick.some(p=>p.item.id===r.item.id)).map(r=>r.item.name);
+  S.trip = {created:Date.now(), origin, total:chosen.cost, km:route.d, stops, mapsUrl,
+    alternatives: bestByK.map((b,i)=>({k:i+1, cost:b.cost, missing:b.missing, chosen:b===chosen})),
+    noPrice: noPrice.map(i=>i.name), missing};
+  save();
+}
+
+/* ================= Visninger ================= */
+let view = 'liste';
+function go(v){ view=v; render(); window.scrollTo(0,0); }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
+
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on', b.dataset.v===view));
+  $('#demoBadge').hidden = !S.settings.demo;
+  $('#title').textContent = {liste:'Handleliste', tilbud:'Tilbud', tur:'Handletur', profil:'Profil'}[view];
+  $('#main').innerHTML = ({liste:vListe, tilbud:vTilbud, tur:vTur, profil:vProfil})[view]();
+  ({liste:bListe, tilbud:bTilbud, tur:bTur, profil:bProfil})[view]();
+}
+
+/* ---- Liste ---- */
+function vListe(){
+  const items = S.items;
+  return `
+  <div class="card">
+    <form id="addForm" class="row">
+      <input id="addName" class="grow" placeholder="Legg til vare, f.eks. lettmelk" autocomplete="off">
+      <input id="addQty" class="num" type="number" min="1" value="1" inputmode="numeric" aria-label="Antall">
+      <button class="btn">Legg til</button>
+    </form>
+  </div>
+  <div class="card">
+    ${items.length ? items.map(i=>`
+      <div class="item">
+        <div class="grow">
+          <div class="name">${esc(i.name)}</div>
+          <div class="small">${i.ean ? '✓ '+esc(i.productName) : '<span class="warn">Ikke koblet til produkt – bare tilbud brukes</span>'}</div>
+        </div>
+        <input class="num qty" data-id="${i.id}" type="number" min="1" value="${i.qty}" inputmode="numeric" aria-label="Antall">
+        <button class="btn sec link" data-id="${i.id}">${i.ean?'Bytt':'Finn pris'}</button>
+        <button class="btn ghost del" data-id="${i.id}" aria-label="Slett">✕</button>
+      </div>`).join('') : '<div class="empty">Listen er tom. Legg til det du trenger.</div>'}
+  </div>
+  ${items.length ? `<button id="planBtn" class="btn big">Finn billigste handletur</button>
+  <p class="tiny" style="text-align:center">Maks ${S.settings.maxStores} butikker · ekstra butikk bare ved minst ${S.settings.minSaving} kr spart · ${S.settings.radiusKm} km radius</p>` : ''}`;
+}
+function bListe(){
+  $('#addForm').onsubmit = e => {
+    e.preventDefault();
+    const name = $('#addName').value.trim(); if(!name) return;
+    S.items.push({id:uid(), name, qty:Math.max(1,+$('#addQty').value||1), ean:null, productName:''});
+    save(); render(); $('#addName').focus();
+  };
+  document.querySelectorAll('.qty').forEach(el=>el.onchange=()=>{ const i=S.items.find(x=>x.id===el.dataset.id); i.qty=Math.max(1,+el.value||1); save(); });
+  document.querySelectorAll('.del').forEach(el=>el.onclick=()=>{ S.items=S.items.filter(x=>x.id!==el.dataset.id); save(); render(); });
+  document.querySelectorAll('.link').forEach(el=>el.onclick=()=>openProductSearch(S.items.find(x=>x.id===el.dataset.id)));
+  const pb = $('#planBtn');
+  if(pb) pb.onclick = async () => {
+    pb.disabled = true; pb.innerHTML = '<span class="spin"></span> Henter priser og butikker…';
+    try{ await planTrip(); go('tur'); }
+    catch(e){ toast(e.message, 5000); pb.disabled=false; pb.textContent='Finn billigste handletur'; }
+  };
+}
+function openProductSearch(item){
+  modal(`
+    <h2 style="margin:0 0 10px">Finn produkt for «${esc(item.name)}»</h2>
+    <form id="psForm" class="row"><input id="psQ" class="grow" value="${esc(item.name)}"><button class="btn">Søk</button></form>
+    <div id="psRes" style="margin-top:10px"></div>
+    ${item.ean?'<button id="psUnlink" class="btn ghost">Fjern kobling</button>':''}`);
+  const doSearch = async () => {
+    const box = $('#psRes'); box.innerHTML = '<div class="empty"><span class="spin"></span></div>';
+    try{
+      const res = await searchProducts($('#psQ').value.trim());
+      // slå sammen like EAN
+      const seen = new Map(); for(const p of res){ if(!seen.has(p.ean)) seen.set(p.ean,p); }
+      const list = [...seen.values()];
+      box.innerHTML = list.length ? list.map(p=>`
+        <div class="item pick" data-ean="${esc(p.ean)}" data-name="${esc(p.name)}" style="cursor:pointer">
+          <div class="grow"><div class="name">${esc(p.name)}</div><div class="tiny">${esc([p.brand,p.weight].filter(Boolean).join(' · '))} · EAN ${esc(p.ean)}</div></div>
+          ${p.price!=null?`<div class="small">fra ${kr(+p.price)}</div>`:''}
+        </div>`).join('') : '<div class="empty">Ingen treff. Prøv et annet ord.</div>';
+      box.querySelectorAll('.pick').forEach(el=>el.onclick=()=>{
+        item.ean = el.dataset.ean; item.productName = el.dataset.name; save(); closeModal(); render();
+      });
+    }catch(e){ box.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  };
+  $('#psForm').onsubmit = e => { e.preventDefault(); doSearch(); };
+  const ul = $('#psUnlink'); if(ul) ul.onclick = () => { item.ean=null; item.productName=''; save(); closeModal(); render(); };
+  doSearch();
+}
+
+/* ---- Tilbud ---- */
+let pendingImport = null;
+function chainOpts(sel){ return Object.entries(CHAINS).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v}</option>`).join(''); }
+function progOpts(sel){ return '<option value="">Alle</option>'+Object.entries(PROGRAMS).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>Kun ${v.name}</option>`).join(''); }
+function vTilbud(){
+  const valid = S.offers.filter(offerValid), expired = S.offers.length - valid.length;
+  const byChain = {}; for(const o of valid) (byChain[o.chain] ||= []).push(o);
+  return `
+  <div class="card">
+    <h2>Les inn kundeavis</h2>
+    <p class="small" style="margin-top:0">PDF eller skjermbilder. AI leser ut varer, priser og datoer, så ser du over før det lagres.</p>
+    <label class="lbl">Kjede (hjelper tolkningen)</label>
+    <select id="impChain"><option value="">Finn selv</option>${chainOpts('')}</select>
+    <label class="lbl">Fil(er)</label>
+    <input id="impFiles" type="file" accept="application/pdf,image/*" multiple>
+    <button id="impBtn" class="btn big">Les kundeavis</button>
+    <div id="impStatus" class="small" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>Legg inn tilbud manuelt</h2>
+    <form id="offForm">
+      <input id="offName" placeholder="Vare, f.eks. Tine lettmelk 1 l" required>
+      <div class="row" style="margin-top:8px">
+        <select id="offChain" class="grow">${chainOpts('kiwi')}</select>
+        <input id="offPrice" class="num" style="width:100px" type="number" step="0.01" min="0" placeholder="Pris" inputmode="decimal" required>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <select id="offMember" class="grow">${progOpts('')}</select>
+        <input id="offTo" type="date" class="grow" aria-label="Gyldig til">
+      </div>
+      <input id="offCond" placeholder="Betingelse (valgfritt), f.eks. 3 for 2" style="margin-top:8px">
+      <button class="btn big">Lagre tilbud</button>
+    </form>
+  </div>
+  <div class="card">
+    <div class="row"><h2 class="grow" style="margin:0">Aktive tilbud (${valid.length})</h2>${expired?`<button id="purge" class="btn ghost">Fjern ${expired} utløpte</button>`:''}</div>
+    ${valid.length ? Object.entries(byChain).map(([c,list])=>`
+      <h3>${CHAINS[c]||c}</h3>
+      ${list.map(o=>`<div class="item">
+        <div class="grow"><div class="name">${esc(o.name)}</div>
+          <div class="tiny">${[o.condition, o.member?('kun '+PROGRAMS[o.member]?.name):'', o.to?('t.o.m. '+fmtDate(o.to)):''].filter(Boolean).map(esc).join(' · ')}</div></div>
+        <div class="price">${kr(+o.price)}</div>
+        <button class="btn ghost odel" data-id="${o.id}" aria-label="Slett">✕</button></div>`).join('')}`).join('')
+      : '<div class="empty">Ingen aktive tilbud ennå.</div>'}
+  </div>
+  ${vShared()}`;
+}
+function vShared(){
+  const own = new Set(S.offers.map(o=>o.remoteId).filter(Boolean));
+  const list = S.shared.offers.filter(o=>offerValid(o) && !own.has(o.remoteId) && !o.mine);
+  const byChain = {}; for(const o of list) (byChain[o.chain] ||= []).push(o);
+  return `<div class="card">
+    <div class="row"><h2 class="grow" style="margin:0">Fra nærområdet (${list.length})</h2><button id="shRefresh" class="btn ghost">Oppdater</button></div>
+    <p class="tiny" style="margin:4px 0 0">Tilbud andre har lagt inn innen ${S.settings.sharedKm} km${S.shared.ts?' · hentet '+new Date(S.shared.ts).toLocaleTimeString('nb-NO',{timeStyle:'short'}):''}. Bekreft det som stemmer, rapporter feil. Tilbud med 3 rapporter skjules.</p>
+    ${list.length ? Object.entries(byChain).map(([c,l])=>`<h3>${CHAINS[c]||c}</h3>${l.map(o=>`
+      <div class="item">
+        <div class="grow"><div class="name">${esc(o.name)}</div>
+          <div class="tiny">${[o.condition, o.member?('kun '+(PROGRAMS[o.member]?.name||'')):'', o.to?('t.o.m. '+fmtDate(o.to)):'', o.nick?('av '+o.nick):''].filter(Boolean).map(esc).join(' · ')}</div></div>
+        <div class="price">${kr(o.price)}</div>
+        <button class="btn ghost vote" data-id="${o.remoteId}" data-k="confirm" title="Stemmer" style="${o.voted==='confirm'?'color:var(--green)':''}">👍 ${o.confirms||''}</button>
+        <button class="btn ghost vote" data-id="${o.remoteId}" data-k="report" title="Feil / utgått" style="${o.voted==='report'?'color:var(--red)':''}">⚠${o.reports?' '+o.reports:''}</button>
+      </div>`).join('')}`).join('') : `<div class="empty">${S.settings.share?'Ingen delte tilbud i nærheten ennå.':'Deling er slått av i Profil.'}</div>`}
+  </div>`;
+}
+function readB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); }); }
+async function shrinkImage(file){
+  // Skaler ned store bilder til maks 1600 px for å holde forespørselen liten
+  try{
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(1, 1600/Math.max(bmp.width,bmp.height));
+    const c = document.createElement('canvas'); c.width=Math.round(bmp.width*s); c.height=Math.round(bmp.height*s);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    return c.toDataURL('image/jpeg',0.85).split(',')[1];
+  }catch(e){ return readB64(file); }
+}
+function bTilbud(){
+  $('#impBtn').onclick = async () => {
+    const files = [...$('#impFiles').files], st = $('#impStatus'), chainHint = $('#impChain').value;
+    if(!files.length && !S.settings.demo){ st.textContent='Velg en PDF eller bilder først.'; return; }
+    const btn = $('#impBtn'); btn.disabled = true;
+    st.innerHTML = '<span class="spin"></span> Leser kundeavisen… (kan ta opptil et minutt)';
+    try{
+      const payload = [];
+      for(const f of files){
+        if(f.type==='application/pdf'){
+          if(f.size > 30e6) throw new Error(f.name+' er for stor (maks 30 MB).');
+          payload.push({type:'pdf', media_type:'application/pdf', data: await readB64(f)});
+        } else payload.push({type:'image', media_type:'image/jpeg', data: await shrinkImage(f)});
+      }
+      const res = await parseFlyer(payload, chainHint);
+      const chain = normChain(res.kjede) || chainHint || 'kiwi';
+      pendingImport = (res.tilbud||[]).map(t=>({
+        keep:true, chain, name:[t.merke, t.vare, t.mengde].filter(Boolean).join(' '),
+        price: t.pris, condition: t.betingelse||'', member: t.kun_medlem ? (Object.keys(PROGRAMS).find(k=>PROGRAMS[k].chains.includes(chain))||'') : '',
+        from: res.gyldig_fra||'', to: res.gyldig_til||''
+      })).filter(t=>t.price!=null && !isNaN(+t.price));
+      st.textContent = '';
+      openReview();
+    }catch(e){ st.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+    btn.disabled = false;
+  };
+  $('#offForm').onsubmit = e => {
+    e.preventDefault();
+    const o = {id:uid(), chain:$('#offChain').value, name:$('#offName').value.trim(), price:+$('#offPrice').value,
+      condition:$('#offCond').value.trim(), member:$('#offMember').value, from:today(), to:$('#offTo').value||'', source:'manuell'};
+    S.offers.push(o); save(); toast('Tilbud lagret'); render();
+    shareOffers([o]);
+  };
+  document.querySelectorAll('.odel').forEach(el=>el.onclick=()=>{
+    const o = S.offers.find(x=>x.id===el.dataset.id); if(o?.remoteId) deleteShared(o.remoteId);
+    S.offers=S.offers.filter(x=>x.id!==el.dataset.id); save(); render();
+  });
+  document.querySelectorAll('.vote').forEach(el=>el.onclick=async()=>{
+    try{ await voteShared(+el.dataset.id, el.dataset.k); render(); }catch(e){ toast(e.message); }
+  });
+  $('#shRefresh').onclick = async () => {
+    $('#shRefresh').innerHTML='<span class="spin"></span>';
+    try{ await syncShared(null, true); }catch(e){ toast(e.message, 4500); }
+    if(view==='tilbud') render();
+  };
+  if(S.settings.share && Date.now()-S.shared.ts > 10*60e3 && (S.settings.demo || S.settings.proxyUrl)){
+    syncShared().then(()=>{ if(view==='tilbud' && !$('#modalRoot').innerHTML) render(); }).catch(()=>{});
+  }
+  const p = $('#purge'); if(p) p.onclick = () => { S.offers = S.offers.filter(offerValid); save(); render(); };
+}
+function openReview(){
+  const L = pendingImport;
+  if(!L.length){ toast('Fant ingen tilbud i filen.'); return; }
+  const f = L[0];
+  modal(`
+    <h2 style="margin:0 0 6px">Se over ${L.length} tilbud</h2>
+    <p class="small" style="margin:0 0 8px">Rett feil og fjern haken på det du ikke vil ha med.</p>
+    <div class="row">
+      <select id="rvChain" class="grow">${chainOpts(f.chain)}</select>
+      <input id="rvFrom" type="date" class="grow" value="${esc(f.from)}" aria-label="Gyldig fra">
+      <input id="rvTo" type="date" class="grow" value="${esc(f.to)}" aria-label="Gyldig til">
+    </div>
+    <table class="rev" style="margin-top:8px"><tbody>
+      ${L.map((t,i)=>`<tr>
+        <td><input type="checkbox" class="rvk" data-i="${i}" ${t.keep?'checked':''}></td>
+        <td><input class="rvn" data-i="${i}" value="${esc(t.name)}">
+            <div class="row" style="margin-top:4px"><input class="rvc" data-i="${i}" value="${esc(t.condition)}" placeholder="Betingelse">
+            <select class="rvm" data-i="${i}" style="width:auto">${progOpts(t.member)}</select></div></td>
+        <td style="width:84px"><input class="rvp" data-i="${i}" type="number" step="0.01" value="${esc(t.price)}" inputmode="decimal"></td>
+      </tr>`).join('')}
+    </tbody></table>
+    <button id="rvSave" class="btn big">Lagre valgte</button>
+    <button id="rvCancel" class="btn ghost" style="width:100%">Avbryt</button>`);
+  $('#rvSave').onclick = () => {
+    const chain=$('#rvChain').value, from=$('#rvFrom').value, to=$('#rvTo').value; const added=[];
+    L.forEach((t,i)=>{
+      if(!document.querySelector(`.rvk[data-i="${i}"]`).checked) return;
+      const price = +document.querySelector(`.rvp[data-i="${i}"]`).value; if(isNaN(price)) return;
+      const o = {id:uid(), chain, name:document.querySelector(`.rvn[data-i="${i}"]`).value.trim(), price,
+        condition:document.querySelector(`.rvc[data-i="${i}"]`).value.trim(), member:document.querySelector(`.rvm[data-i="${i}"]`).value,
+        from, to, source:'kundeavis'};
+      S.offers.push(o); added.push(o);
+    });
+    pendingImport=null; save(); closeModal(); toast(added.length+' tilbud lagret'); render();
+    shareOffers(added);
+  };
+  $('#rvCancel').onclick = () => { pendingImport=null; closeModal(); };
+}
+
+/* ---- Handletur ---- */
+function vTur(){
+  const T = S.trip;
+  if(!T) return `<div class="card empty">Ingen handletur ennå.<br><br><button class="btn" onclick="go('liste')">Gå til handlelisten</button></div>`;
+  const left = T.stops.reduce((n,s)=>n+s.items.filter(i=>!i.done).length,0);
+  return `
+  <div class="card">
+    <div class="row"><div class="grow"><div class="small">Totalt${Object.values(S.memberships).some(m=>m.on&&m.bonus)?' etter bonus':''}</div><div class="total">${kr(T.total)}</div></div>
+      <div style="text-align:right"><div class="small">${T.stops.length} butikk${T.stops.length>1?'er':''}</div><div class="small">ca. ${T.km.toFixed(1)} km i luftlinje</div></div></div>
+    <div class="alts">${T.alternatives.map(a=>`<span class="${a.chosen?'sel':''}">${a.k} butikk${a.k>1?'er':''}: ${kr(a.cost)}${a.missing?' ('+a.missing+' mangler)':''}</span>`).join('')}</div>
+    <a class="btn big" href="${esc(T.mapsUrl)}" target="_blank" rel="noopener" style="margin-top:12px">Åpne rute i Google Maps</a>
+  </div>
+  ${T.stops.map((s,n)=>`
+    <div class="card stop">
+      <div class="row"><div class="stopnum">${n+1}</div>
+        <div class="grow"><div class="name" style="font-weight:700">${esc(s.store.name)}</div><div class="tiny">${esc(s.store.address)} · ${s.dist.toFixed(1)} km</div></div>
+        <div class="price">${kr(s.items.reduce((a,i)=>a+i.total,0))}</div></div>
+      <div style="margin-top:6px">
+      ${s.items.map((i,j)=>{ const d=daysOld(i.date); const stale = d!=null && d>STALE_DAYS;
+        return `<label class="item ${i.done?'done':''}">
+          <input type="checkbox" class="tick" data-s="${n}" data-i="${j}" ${i.done?'checked':''}>
+          <div class="grow"><div class="name">${i.qty>1?i.qty+' × ':''}${esc(i.name)}</div>
+            <div class="tiny"><span class="pill ${stale?'w':''}">${esc(i.source)}</span>${stale?`<span class="warn">pris fra ${fmtDate(i.date)} – kan være utdatert</span> `:''}${esc([i.note,i.disc].filter(Boolean).join(' · '))}</div></div>
+          <div class="price">${kr(i.total)}</div></label>`; }).join('')}
+      </div>
+    </div>`).join('')}
+  ${T.noPrice.length?`<div class="card"><h2>Uten pris</h2><p class="small" style="margin:0">${T.noPrice.map(esc).join(', ')} – koble dem til et produkt eller legg inn tilbud. Kjøp der det passer.</p></div>`:''}
+  ${T.missing.length?`<div class="card"><h2>Ikke med på ruten</h2><p class="small" style="margin:0">${T.missing.map(esc).join(', ')} – finnes bare i butikker utenfor ruten. Øk «maks butikker» om du vil ha dem med.</p></div>`:''}
+  <p class="tiny" style="text-align:center">${left} varer igjen · beregnet ${new Date(T.created).toLocaleString('nb-NO',{dateStyle:'short',timeStyle:'short'})}</p>
+  <button id="replan" class="btn sec big">Beregn på nytt</button>
+  ${left===0?'<button id="finish" class="btn big">Ferdig – fjern kjøpte varer fra listen</button>':''}`;
+}
+function bTur(){
+  document.querySelectorAll('.tick').forEach(el=>el.onchange=()=>{ S.trip.stops[+el.dataset.s].items[+el.dataset.i].done = el.checked; save(); render(); });
+  const r=$('#replan'); if(r) r.onclick = async () => { r.disabled=true; r.innerHTML='<span class="spin"></span> Beregner…'; try{ await planTrip(); render(); }catch(e){ toast(e.message,5000); r.disabled=false; r.textContent='Beregn på nytt'; } };
+  const f=$('#finish'); if(f) f.onclick = () => {
+    const bought = new Set(S.trip.stops.flatMap(s=>s.items.map(i=>i.itemId)));
+    S.items = S.items.filter(i=>!bought.has(i.id)); S.trip=null; save(); toast('God handletur!'); go('liste');
+  };
+}
+
+/* ---- Profil ---- */
+function vProfil(){
+  const st = S.settings;
+  return `
+  <div class="card">
+    <h2>Medlemskap</h2>
+    <p class="small" style="margin-top:0">Slå på det du er medlem av. Bonus i % trekkes fra prisen i sammenligningen. Medlemstilbud brukes bare når du er medlem.</p>
+    ${Object.entries(PROGRAMS).map(([k,p])=>`
+      <div class="item">
+        <input type="checkbox" class="mOn" data-k="${k}" ${S.memberships[k].on?'checked':''}>
+        <div class="grow"><div class="name">${p.name}</div><div class="tiny">${p.chains.map(c=>CHAINS[c]).join(', ')}</div></div>
+        <input class="num mBonus" data-k="${k}" type="number" step="0.5" min="0" max="50" value="${S.memberships[k].bonus}" inputmode="decimal" aria-label="Bonus %"><span class="small">%</span>
+      </div>`).join('')}
+  </div>
+  <div class="card">
+    <h2>Personlige rabatter</h2>
+    <p class="small" style="margin-top:0">F.eks. varer du har valgt rabatt på i Æ, eller faste kuponger. Gjelder varer som inneholder søkeordet.</p>
+    ${S.personal.map(r=>`<div class="item"><div class="grow"><div class="name">${esc(r.keyword)}</div><div class="tiny">${PROGRAMS[r.program].name}</div></div><div class="price">-${r.pct} %</div><button class="btn ghost pdel" data-id="${r.id}">✕</button></div>`).join('')}
+    <form id="pForm" class="row wrap" style="margin-top:8px">
+      <select id="pProg" style="flex:1 1 140px">${Object.entries(PROGRAMS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('')}</select>
+      <input id="pKey" placeholder="Søkeord, f.eks. kaffe" style="flex:2 1 140px" required>
+      <input id="pPct" class="num" type="number" min="1" max="100" placeholder="%" inputmode="decimal" required>
+      <button class="btn sec">Legg til</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Handletur</h2>
+    <label class="lbl">Maks antall butikker</label>
+    <input id="sMax" type="number" min="1" max="5" value="${st.maxStores}" inputmode="numeric">
+    <label class="lbl">Ta med en butikk til bare hvis jeg sparer minst (kr)</label>
+    <input id="sMin" type="number" min="0" value="${st.minSaving}" inputmode="numeric">
+    <label class="lbl">Radius (km)</label>
+    <input id="sRad" type="number" min="1" max="50" value="${st.radiusKm}" inputmode="numeric">
+    <label class="item" style="border:0"><input id="sRet" type="checkbox" ${st.returnHome?'checked':''}><span class="grow">Rute tilbake til start</span></label>
+    <label class="lbl">Fast posisjon (valgfritt, «lat, lng») – brukes hvis GPS ikke er tilgjengelig</label>
+    <input id="sPos" value="${esc(st.manualPos)}" placeholder="67.2804, 14.4049">
+  </div>
+  <div class="card">
+    <h2>Deling med nærområdet</h2>
+    <label class="item" style="border:0"><input id="sShare" type="checkbox" ${st.share?'checked':''}><span class="grow">Del tilbud jeg legger inn, og vis tilbud fra andre</span></label>
+    <p class="tiny" style="margin:0">Det som deles: kjede, vare, pris, betingelse, datoer og et område avrundet til ca. 1 km. Ikke hvor du bor eller hvem du er.</p>
+    <label class="lbl">Kallenavn (valgfritt, vises ved tilbudene dine)</label>
+    <input id="sNick" value="${esc(st.nick)}" maxlength="30" placeholder="F.eks. Sander">
+    <label class="lbl">Vis delte tilbud innen (km)</label>
+    <input id="sShKm" type="number" min="1" max="100" value="${st.sharedKm}" inputmode="numeric">
+  </div>
+  <div class="card">
+    <h2>Oppsett</h2>
+    <label class="item" style="border:0"><input id="sDemo" type="checkbox" ${st.demo?'checked':''}><span class="grow">Demo-modus (oppdiktede priser og butikker)</span></label>
+    <label class="lbl">Mellomtjeneste-URL (Cloudflare Worker)</label>
+    <input id="sUrl" value="${esc(st.proxyUrl)}" placeholder="https://handletur.dittnavn.workers.dev" autocapitalize="off" autocorrect="off">
+    <label class="lbl">App-token</label>
+    <input id="sTok" value="${esc(st.appToken)}" type="password" autocomplete="off">
+    <button id="sTest" class="btn sec big">Test tilkobling</button>
+    <div id="sTestRes" class="small" style="margin-top:6px"></div>
+  </div>
+  <div class="card">
+    <h2>Sikkerhetskopi</h2>
+    <p class="small" style="margin-top:0">Alt lagres bare på denne telefonen. Kopier teksten for å flytte til en annen enhet.</p>
+    <div class="row"><button id="bkCopy" class="btn sec grow">Kopier data</button><button id="bkLoad" class="btn sec grow">Lim inn data</button></div>
+    <textarea id="bkTxt" style="margin-top:8px" placeholder="Lim inn sikkerhetskopi her og trykk «Lim inn data»"></textarea>
+    <button id="clearPrices" class="btn ghost" style="width:100%">Tøm prismellomlager</button>
+  </div>`;
+}
+function bProfil(){
+  const st = S.settings;
+  document.querySelectorAll('.mOn').forEach(el=>el.onchange=()=>{ S.memberships[el.dataset.k].on=el.checked; save(); });
+  document.querySelectorAll('.mBonus').forEach(el=>el.onchange=()=>{ S.memberships[el.dataset.k].bonus=Math.max(0,+el.value||0); save(); });
+  document.querySelectorAll('.pdel').forEach(el=>el.onclick=()=>{ S.personal=S.personal.filter(r=>r.id!==el.dataset.id); save(); render(); });
+  $('#pForm').onsubmit = e => { e.preventDefault(); S.personal.push({id:uid(), program:$('#pProg').value, keyword:$('#pKey').value.trim(), pct:+$('#pPct').value}); save(); render(); };
+  const bind = (id, key, fn=v=>v) => { $(id).onchange = () => { st[key] = fn($(id).type==='checkbox' ? $(id).checked : $(id).value); save(); if(id==='#sDemo') render(); }; };
+  bind('#sMax','maxStores',v=>Math.min(5,Math.max(1,+v||1)));
+  bind('#sMin','minSaving',v=>Math.max(0,+v||0));
+  bind('#sRad','radiusKm',v=>Math.min(50,Math.max(1,+v||5)));
+  bind('#sRet','returnHome'); bind('#sPos','manualPos', v=>v.trim()); bind('#sDemo','demo');
+  bind('#sUrl','proxyUrl', v=>v.trim()); bind('#sTok','appToken', v=>v.trim());
+  bind('#sShare','share'); bind('#sNick','nick', v=>v.trim().slice(0,30));
+  bind('#sShKm','sharedKm', v=>{ S.shared.ts=0; return Math.min(100,Math.max(1,+v||25)); });
+  $('#sTest').onclick = async () => {
+    const out = $('#sTestRes'); out.innerHTML = '<span class="spin"></span>';
+    try{ const j = await api('/health'); out.innerHTML = `✓ Tilkoblet. Kassalapp-nøkkel: ${j.kassal?'OK':'<span class="err">mangler</span>'} · AI-nøkkel: ${j.ai?'OK':'<span class="err">mangler</span>'} · Delingsdatabase: ${j.db?'OK':'<span class="err">mangler</span>'} · Kundeavis-tolkning: ${j.admin?'tilgjengelig':'bare for administrator'}`; }
+    catch(e){ out.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  };
+  $('#bkCopy').onclick = async () => {
+    const data = JSON.stringify({...S, priceCache:{}}); $('#bkTxt').value = data;
+    try{ await navigator.clipboard.writeText(data); toast('Kopiert'); }catch(e){ $('#bkTxt').select(); toast('Merk og kopier teksten'); }
+  };
+  $('#bkLoad').onclick = () => {
+    try{ const o = JSON.parse($('#bkTxt').value); S = deepMerge(structuredClone(DEFAULT), o); save(); toast('Data lastet inn'); render(); }
+    catch(e){ toast('Ugyldig sikkerhetskopi'); }
+  };
+  $('#clearPrices').onclick = () => { S.priceCache = {}; save(); toast('Prismellomlager tømt'); };
+}
+
+/* ---- Modal ---- */
+function modal(html){
+  $('#modalRoot').innerHTML = `<div class="modal" id="mBg"><div class="sheet">${html}</div></div>`;
+  $('#mBg').onclick = e => { if(e.target.id==='mBg') closeModal(); };
+}
+function closeModal(){ $('#modalRoot').innerHTML=''; }
+
+/* ---- Start ---- */
+render();
+try{ if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
+</script>
+</body>
+</html>
