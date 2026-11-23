@@ -520,7 +520,7 @@ function progOpts(sel){ return '<option value="">Alle</option>'+Object.entries(P
 function vTilbud(){
   const valid = S.offers.filter(offerValid), expired = S.offers.length - valid.length;
   const byChain = {}; for(const o of valid) (byChain[o.chain] ||= []).push(o);
-  return `
+  return `${canImport() ? `
   <div class="card">
     <h2>Les inn kundeavis</h2>
     <p class="small" style="margin-top:0">PDF eller skjermbilder. AI leser ut varer, priser og datoer, så ser du over før det lagres.</p>
@@ -530,7 +530,7 @@ function vTilbud(){
     <input id="impFiles" type="file" accept="application/pdf,image/*" multiple>
     <button id="impBtn" class="btn big">Les kundeavis</button>
     <div id="impStatus" class="small" style="margin-top:8px"></div>
-  </div>
+  </div>` : ''}
   <div class="card">
     <h2>Legg inn tilbud manuelt</h2>
     <form id="offForm">
@@ -588,8 +588,15 @@ async function shrinkImage(file){
     return c.toDataURL('image/jpeg',0.85).split(',')[1];
   }catch(e){ return readB64(file); }
 }
+function canImport(){ return S.settings.demo || S.settings.isAdmin === true; }
+// Spør mellomtjenesten om tokenet er admin, og husk svaret
+async function checkRole(){
+  if(S.settings.demo || !S.settings.proxyUrl || !S.settings.appToken){ S.settings.isAdmin = false; save(); return null; }
+  try{ const j = await api('/health'); S.settings.isAdmin = !!j.admin; save(); return j; }
+  catch(e){ S.settings.isAdmin = false; save(); throw e; }
+}
 function bTilbud(){
-  $('#impBtn').onclick = async () => {
+  if($('#impBtn')) $('#impBtn').onclick = async () => {
     const files = [...$('#impFiles').files], st = $('#impStatus'), chainHint = $('#impChain').value;
     if(!files.length && !S.settings.demo){ st.textContent='Velg en PDF eller bilder først.'; return; }
     const btn = $('#impBtn'); btn.disabled = true;
@@ -794,11 +801,14 @@ function bProfil(){
   bind('#sRad','radiusKm',v=>Math.min(50,Math.max(1,+v||5)));
   bind('#sRet','returnHome'); bind('#sPos','manualPos', v=>v.trim()); bind('#sDemo','demo');
   bind('#sUrl','proxyUrl', v=>v.trim()); bind('#sTok','appToken', v=>v.trim());
+  $('#sUrl').addEventListener('change', ()=>checkRole().catch(()=>{}));
+  $('#sDemo').addEventListener('change', ()=>checkRole().catch(()=>{}));
+  $('#sTok').addEventListener('change', ()=>checkRole().catch(()=>{}));
   bind('#sShare','share'); bind('#sNick','nick', v=>v.trim().slice(0,30));
   bind('#sShKm','sharedKm', v=>{ S.shared.ts=0; return Math.min(100,Math.max(1,+v||25)); });
   $('#sTest').onclick = async () => {
     const out = $('#sTestRes'); out.innerHTML = '<span class="spin"></span>';
-    try{ const j = await api('/health'); out.innerHTML = `✓ Tilkoblet. Kassalapp-nøkkel: ${j.kassal?'OK':'<span class="err">mangler</span>'} · AI-nøkkel: ${j.ai?'OK':'<span class="err">mangler</span>'} · Delingsdatabase: ${j.db?'OK':'<span class="err">mangler</span>'} · Kundeavis-tolkning: ${j.admin?'tilgjengelig':'bare for administrator'}`; }
+    try{ const j = await checkRole(); if(!j) throw new Error('Slå av demo-modus og fyll inn URL og token først.'); out.innerHTML = `✓ Tilkoblet. Kassalapp-nøkkel: ${j.kassal?'OK':'<span class="err">mangler</span>'} · AI-nøkkel: ${j.ai?'OK':'<span class="err">mangler</span>'} · Delingsdatabase: ${j.db?'OK':'<span class="err">mangler</span>'} · Kundeavis-tolkning: ${j.admin?'tilgjengelig':'bare for administrator'}`; }
     catch(e){ out.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
   };
   $('#bkCopy').onclick = async () => {
@@ -821,6 +831,7 @@ function closeModal(){ $('#modalRoot').innerHTML=''; }
 
 /* ---- Start ---- */
 render();
+checkRole().then(()=>{ if(view==='tilbud') render(); }).catch(()=>{});
 try{ if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
 </script>
 </body>
