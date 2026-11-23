@@ -253,6 +253,7 @@ async function searchProducts(q){
     chain: normChain(p.store?.code||p.store?.name),
     price: typeof p.current_price==='object' ? p.current_price?.price : p.current_price,
     unitPrice: typeof p.current_unit_price==='object' ? p.current_unit_price?.price : p.current_unit_price,
+    date: (typeof p.current_price==='object' && p.current_price?.date) || p.updated_at || null,
     unit: p.weight_unit==='kg'||p.weight_unit==='g' ? 'kg' : (p.weight_unit==='l'||p.weight_unit==='ml' ? 'l' : '')
   })).filter(p=>p.ean);
 }
@@ -423,11 +424,39 @@ function personalPct(chain, item){
   }
   return pct;
 }
+// «Billigste uansett merke»: søker opp varen og finner billigste variant per kjede (per kg/l når mulig)
+function wordMatch(name, words){
+  const n = ' '+String(name).toLowerCase().replace(/[^a-zæøå0-9]+/g,' ')+' ';
+  return words.every(w => n.includes(' '+w));
+}
+async function cheapestByChain(query){
+  const key = 'q:'+query.toLowerCase();
+  const c = S.priceCache[key];
+  if(c && Date.now()-c.ts < PRICE_CACHE_H*3600e3) return c.prices;
+  const res = await searchProducts(query);
+  const words = tokens(query);
+  let hits = res.filter(p=>p.chain && p.price!=null && wordMatch(p.name, words));
+  if(!hits.length) hits = res.filter(p=>p.chain && p.price!=null && words.every(w=>String(p.name).toLowerCase().includes(w)));
+  const best = {};
+  for(const p of hits){
+    const u = p.unitPrice!=null ? +p.unitPrice : null, cur = best[p.chain];
+    const better = !cur || (u!=null && cur.unitPrice!=null ? u < cur.unitPrice : +p.price < cur.price);
+    if(better) best[p.chain] = {chain:p.chain, price:+p.price, unitPrice:u, unit:p.unit, name:[p.name, p.weight, p.brand?'('+p.brand+')':''].filter(Boolean).join(' '), date:p.date||null};
+  }
+  const prices = Object.values(best);
+  S.priceCache[key] = {ts:Date.now(), prices}; save(true);
+  return prices;
+}
 async function candidatesFor(item){
   const cand = {}; // chain -> {base, eff, source, date, note}
   if(item.ean){
     try{
       for(const p of await pricesForEan(item.ean)) cand[p.chain] = {base:p.price, source:'Kassalapp', date:p.date, note:''};
+    }catch(e){ console.warn(e); }
+  } else if(item.mode==='cheapest'){
+    try{
+      for(const p of await cheapestByChain(item.name)) cand[p.chain] = {base:p.price, source:'Billigste', date:p.date, note:'', prodName:p.name,
+        unitFixed: p.unitPrice!=null && p.unit ? {value:p.unitPrice, unit:p.unit} : null};
     }catch(e){ console.warn(e); }
   }
   for(const o of allOffers()){
@@ -523,8 +552,8 @@ function buildVariant(b, k, origin, stores, rows){
   const stops = route.order.map(st => ({
     store: st, chain: st.chain, dist: haversine(origin, st),
     items: b.pick.filter(p=>p.chain===st.chain).map(p=>({
-      itemId:p.item.id, name:p.item.productName||p.item.name, qty:p.item.qty, unit:p.eff, base:p.base, total:p.eff*p.item.qty,
-      source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, unitTxt:fmtUnit(unitPrice(p.eff, p.qty)), done:false
+      itemId:p.item.id, name:p.prodName||p.item.productName||p.item.name, qty:p.item.qty, unit:p.eff, base:p.base, total:p.eff*p.item.qty,
+      source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, unitTxt:fmtUnit(p.unitFixed || unitPrice(p.eff, p.qty)), done:false
     }))
   }));
   const pts = route.order.map(s=>s.lat+','+s.lng);
@@ -573,10 +602,10 @@ function vListe(){
       <div class="item">
         <div class="grow">
           <div class="name">${esc(i.name)}</div>
-          <div class="small">${i.ean ? '✓ '+esc(i.productName) : '<span class="warn">Ikke koblet til produkt – bare tilbud brukes</span>'}</div>
+          <div class="small">${i.ean ? '✓ '+esc(i.productName) : i.mode==='cheapest' ? '⚡ Billigste uansett merke' : '<span class="warn">Ikke koblet til produkt – bare tilbud brukes</span>'}</div>
         </div>
         <input class="num qty" data-id="${i.id}" type="number" min="1" value="${i.qty}" inputmode="numeric" aria-label="Antall">
-        <button class="btn sec link" data-id="${i.id}">${i.ean?'Bytt':'Finn pris'}</button>
+        <button class="btn sec link" data-id="${i.id}">${i.ean||i.mode==='cheapest'?'Velg selv':'Finn pris'}</button>
         <button class="btn ghost del" data-id="${i.id}" aria-label="Slett">✕</button>
       </div>`).join('') : '<div class="empty">Listen er tom. Legg til det du trenger.</div>'}
   </div>
@@ -589,7 +618,9 @@ function bListe(){
     const name = $('#addName').value.trim(); if(!name) return;
     const item = {id:uid(), name, qty:Math.max(1,+$('#addQty').value||1), ean:null, productName:''};
     S.items.push(item); save(); render();
-    if(S.settings.suggest !== false && (S.settings.demo || S.settings.proxyUrl)) openProductSearch(item, true);
+    const mode = addMode();
+    if(mode==='cheapest'){ item.mode='cheapest'; save(); render(); toast('Velger billigste «'+name+'» – trykk «Velg selv» for et bestemt merke', 3500); $('#addName').focus(); }
+    else if(mode==='suggest' && (S.settings.demo || S.settings.proxyUrl)) openProductSearch(item, true);
     else $('#addName').focus();
   };
   document.querySelectorAll('.qty').forEach(el=>el.onchange=()=>{ const i=S.items.find(x=>x.id===el.dataset.id); i.qty=Math.max(1,+el.value||1); save(); });
@@ -602,6 +633,7 @@ function bListe(){
     catch(e){ toast(e.message, 5000); pb.disabled=false; pb.textContent='Finn billigste handletur'; }
   };
 }
+function addMode(){ return S.settings.addMode || (S.settings.suggest===false ? 'none' : 'cheapest'); }
 function productCard(g, i, top){
   const where = g.cheapChain ? ' hos '+(CHAINS[g.cheapChain]||'') : '';
   return `<div class="item pick" data-ean="${esc(g.ean)}" data-name="${esc(g.name)}" style="cursor:pointer;${top?'padding:12px 0':''}">
@@ -621,6 +653,7 @@ function openProductSearch(item, fresh=false){
     <h2 style="margin:0 0 4px">${fresh?'Hvilken':'Velg'} «${esc(item.name)}»?</h2>
     <p class="tiny" style="margin:0 0 10px">De beste treffene, billigst per kilo/liter først.</p>
     <form id="psForm" class="row"><input id="psQ" class="grow" value="${esc(item.name)}"><button class="btn sec">Søk</button></form>
+    ${item.mode!=='cheapest'||item.ean?`<button id="psCheap" class="btn sec big" style="margin-top:8px">⚡ Velg billigste – uansett merke</button>`:''}
     <div id="psRes" style="margin-top:6px"></div>
     <div class="row" style="margin-top:8px">
       ${item.ean?'<button id="psUnlink" class="btn ghost">Fjern kobling</button>':''}
@@ -637,13 +670,14 @@ function openProductSearch(item, fresh=false){
         (rest.length ? `<button id="psMore" class="btn ghost" style="width:100%">Vis ${rest.length} flere</button><div id="psRest" hidden>${rest.map((g,i)=>productCard(g,i,false)).join('')}</div>` : '');
       const more = $('#psMore'); if(more) more.onclick = () => { $('#psRest').hidden = false; more.remove(); };
       box.querySelectorAll('.pick').forEach(el=>el.onclick=()=>{
-        item.ean = el.dataset.ean; item.productName = el.dataset.name; save(); closeModal(); render();
+        item.ean = el.dataset.ean; item.productName = el.dataset.name; delete item.mode; save(); closeModal(); render();
       });
     }catch(e){ box.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
   };
   $('#psForm').onsubmit = e => { e.preventDefault(); doSearch(); };
-  const ul = $('#psUnlink'); if(ul) ul.onclick = () => { item.ean=null; item.productName=''; save(); closeModal(); render(); };
+  const ul = $('#psUnlink'); if(ul) ul.onclick = () => { item.ean=null; item.productName=''; delete item.mode; save(); closeModal(); render(); };
   $('#psSkip').onclick = closeModal;
+  const pc = $('#psCheap'); if(pc) pc.onclick = () => { item.ean=null; item.productName=''; item.mode='cheapest'; save(); closeModal(); render(); };
   doSearch();
 }
 
@@ -923,7 +957,12 @@ function vProfil(){
     <label class="lbl">Radius (km)</label>
     <input id="sRad" type="number" min="1" max="50" value="${st.radiusKm}" inputmode="numeric">
     <label class="item" style="border:0"><input id="sRet" type="checkbox" ${st.returnHome?'checked':''}><span class="grow">Rute tilbake til start</span></label>
-    <label class="item" style="border:0"><input id="sSug" type="checkbox" ${st.suggest!==false?'checked':''}><span class="grow">Vis forslag når jeg legger til en vare</span></label>
+    <label class="lbl">Når jeg legger til en vare</label>
+    <select id="sAdd">
+      <option value="cheapest" ${addMode()==='cheapest'?'selected':''}>Velg billigste automatisk (uansett merke)</option>
+      <option value="suggest" ${addMode()==='suggest'?'selected':''}>Vis de 3 beste forslagene</option>
+      <option value="none" ${addMode()==='none'?'selected':''}>Ikke gjør noe – jeg velger selv</option>
+    </select>
     <label class="lbl">Fast posisjon (valgfritt, «lat, lng») – brukes hvis GPS ikke er tilgjengelig</label>
     <input id="sPos" value="${esc(st.manualPos)}" placeholder="67.2804, 14.4049">
   </div>
@@ -990,7 +1029,7 @@ function bProfil(){
   bind('#sMax','maxStores',v=>Math.min(5,Math.max(1,+v||1)));
   bind('#sMin','minSaving',v=>Math.max(0,+v||0));
   bind('#sRad','radiusKm',v=>Math.min(50,Math.max(1,+v||5)));
-  bind('#sRet','returnHome'); bind('#sSug','suggest'); bind('#sPos','manualPos', v=>v.trim()); bind('#sDemo','demo');
+  bind('#sRet','returnHome'); bind('#sAdd','addMode'); bind('#sPos','manualPos', v=>v.trim()); bind('#sDemo','demo');
   bind('#sUrl','proxyUrl', v=>v.trim()); bind('#sTok','appToken', v=>v.trim());
   $('#sUrl').addEventListener('change', ()=>checkRole().catch(()=>{}));
   $('#sDemo').addEventListener('change', ()=>checkRole().catch(()=>{}));
