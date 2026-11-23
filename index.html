@@ -408,12 +408,18 @@ async function planTrip(){
   for(const b of bestByK.slice(1)){
     if(b.missing < chosen.missing || chosen.cost - b.cost >= S.settings.minSaving) chosen = b;
   }
-  // Ta bort kjeder som ikke fikk noen varer
-  const usedChains = [...new Set(chosen.pick.map(p=>p.chain))];
+  // Bygg en ferdig rute for hvert alternativ (1, 2, 3 … butikker), så du kan bytte mellom dem
+  const variants = bestByK.map((b,i) => buildVariant(b, i+1, origin, stores, rows));
+  S.trip = {created:Date.now(), origin, variants, noPrice: noPrice.map(i=>i.name)};
+  selectVariant(bestByK.indexOf(chosen), true);
+  save();
+}
+function buildVariant(b, k, origin, stores, rows){
+  const usedChains = [...new Set(b.pick.map(p=>p.chain))];
   const route = bestRoute(origin, usedChains, stores);
   const stops = route.order.map(st => ({
     store: st, chain: st.chain, dist: haversine(origin, st),
-    items: chosen.pick.filter(p=>p.chain===st.chain).map(p=>({
+    items: b.pick.filter(p=>p.chain===st.chain).map(p=>({
       itemId:p.item.id, name:p.item.productName||p.item.name, qty:p.item.qty, unit:p.eff, base:p.base, total:p.eff*p.item.qty,
       source:p.source, date:p.date, note:p.note, disc:p.disc, offerName:p.offerName, done:false
     }))
@@ -422,11 +428,17 @@ async function planTrip(){
   const dest = S.settings.returnHome ? origin.lat+','+origin.lng : pts[pts.length-1];
   const wps = S.settings.returnHome ? pts : pts.slice(0,-1);
   const mapsUrl = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&origin='+origin.lat+','+origin.lng+'&destination='+dest+(wps.length?'&waypoints='+encodeURIComponent(wps.join('|')):'');
-  const missing = rows.filter(r=>Object.keys(r.cand).length && !chosen.pick.some(p=>p.item.id===r.item.id)).map(r=>r.item.name);
-  S.trip = {created:Date.now(), origin, total:chosen.cost, km:route.d, stops, mapsUrl,
-    alternatives: bestByK.map((b,i)=>({k:i+1, cost:b.cost, missing:b.missing, chosen:b===chosen})),
-    noPrice: noPrice.map(i=>i.name), missing};
-  save();
+  const missing = rows.filter(r=>Object.keys(r.cand).length && !b.pick.some(p=>p.item.id===r.item.id)).map(r=>r.item.name);
+  return {k, cost:b.cost, missingCount:b.missing, total:b.cost, km:route.d, stops, mapsUrl, missing};
+}
+// Bytt hvilket alternativ som vises. Avkryssinger beholdes for varer du allerede har tatt.
+function selectVariant(i, auto=false){
+  const T = S.trip, V = T.variants[i]; if(!V) return;
+  const done = new Set((T.stops||[]).flatMap(s=>s.items.filter(x=>x.done).map(x=>x.itemId)));
+  V.stops.forEach(s=>s.items.forEach(x=>{ if(done.has(x.itemId)) x.done = true; }));
+  Object.assign(T, {sel:i, total:V.total, km:V.km, stops:V.stops, mapsUrl:V.mapsUrl, missing:V.missing});
+  if(auto) T.recommended = i;
+  T.alternatives = T.variants.map((v,j)=>({k:v.k, cost:v.cost, missing:v.missingCount, chosen:j===i, rec:j===T.recommended}));
 }
 
 /* ================= Visninger ================= */
@@ -693,7 +705,9 @@ function vTur(){
   <div class="card">
     <div class="row"><div class="grow"><div class="small">Totalt${Object.values(S.memberships).some(m=>m.on&&m.bonus)?' etter bonus':''}</div><div class="total">${kr(T.total)}</div></div>
       <div style="text-align:right"><div class="small">${T.stops.length} butikk${T.stops.length>1?'er':''}</div><div class="small">ca. ${T.km.toFixed(1)} km i luftlinje</div></div></div>
-    <div class="alts">${T.alternatives.map(a=>`<span class="${a.chosen?'sel':''}">${a.k} butikk${a.k>1?'er':''}: ${kr(a.cost)}${a.missing?' ('+a.missing+' mangler)':''}</span>`).join('')}</div>
+    ${T.alternatives.length>1?'<div class="tiny" style="margin-top:10px">Trykk for å velge antall butikker:</div>':''}
+    <div class="alts">${T.alternatives.map((a,i)=>`<span class="alt ${a.chosen?'sel':''}" data-i="${i}" role="button" style="cursor:pointer">${a.k} butikk${a.k>1?'er':''}: ${kr(a.cost)}${a.missing?' ('+a.missing+' mangler)':''}${a.rec?' ★':''}</span>`).join('')}</div>
+    ${T.alternatives.length>1?'<div class="tiny" style="margin-top:4px">★ = anbefalt ut fra innstillingene dine</div>':''}
     <a class="btn big" href="${esc(T.mapsUrl)}" target="_blank" rel="noopener" style="margin-top:12px">Åpne rute i Google Maps</a>
   </div>
   ${T.stops.map((s,n)=>`
@@ -717,6 +731,7 @@ function vTur(){
   ${left===0?'<button id="finish" class="btn big">Ferdig – fjern kjøpte varer fra listen</button>':''}`;
 }
 function bTur(){
+  document.querySelectorAll('.alt').forEach(el=>el.onclick=()=>{ selectVariant(+el.dataset.i); save(); render(); });
   document.querySelectorAll('.tick').forEach(el=>el.onchange=()=>{ S.trip.stops[+el.dataset.s].items[+el.dataset.i].done = el.checked; save(); render(); });
   const r=$('#replan'); if(r) r.onclick = async () => { r.disabled=true; r.innerHTML='<span class="spin"></span> Beregner…'; try{ await planTrip(); render(); }catch(e){ toast(e.message,5000); r.disabled=false; r.textContent='Beregn på nytt'; } };
   const f=$('#finish'); if(f) f.onclick = () => {
